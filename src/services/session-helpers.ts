@@ -120,40 +120,55 @@ export function buildAgentConfigWithApiKey(
 ) {
 	const baseConfig = toAgentConfig(agentSettings, workingDirectory);
 
+	const withHermes = (cfg: typeof baseConfig) => {
+		if (settings.transportMode !== "hermes-api") {
+			return cfg;
+		}
+		return {
+			...cfg,
+			env: {
+				...(cfg.env ?? {}),
+				HERMES_API_BASE: settings.hermesApi.endpoint,
+				HERMES_API_KEY: settings.hermesApi.apiKey,
+				HERMES_MODEL: settings.hermesApi.defaultModel,
+			},
+		};
+	};
+
 	// Add API keys to environment for Claude, Codex, and Gemini
 	if (agentId === settings.claude.id) {
 		const claudeSettings = agentSettings as ClaudeAgentSettings;
-		return {
+		return withHermes({
 			...baseConfig,
 			env: {
 				...baseConfig.env,
 				ANTHROPIC_API_KEY: claudeSettings.apiKey,
 			},
-		};
+		});
 	}
 	if (agentId === settings.codex.id) {
 		const codexSettings = agentSettings as CodexAgentSettings;
-		return {
+		return withHermes({
 			...baseConfig,
 			env: {
 				...baseConfig.env,
 				OPENAI_API_KEY: codexSettings.apiKey,
 			},
-		};
+		});
 	}
 	if (agentId === settings.gemini.id) {
 		const geminiSettings = agentSettings as GeminiAgentSettings;
-		return {
+		return withHermes({
 			...baseConfig,
 			env: {
 				...baseConfig.env,
 				GEMINI_API_KEY: geminiSettings.apiKey,
 			},
-		};
+		});
 	}
 
 	// Custom agents - no API key injection
-	return baseConfig;
+	return withHermes(baseConfig);
 }
 
 // ============================================================================

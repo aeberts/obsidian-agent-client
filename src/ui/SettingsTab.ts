@@ -109,6 +109,61 @@ export class AgentClientSettingTab extends PluginSettingTab {
 					}),
 			);
 
+		new Setting(containerEl).setName("Transport").setHeading();
+
+		new Setting(containerEl)
+			.setName("Transport backend")
+			.setDesc("Select ACP (default) or Hermes API transport.")
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("acp", "ACP")
+					.addOption("hermes-api", "Hermes API")
+					.setValue(this.plugin.settings.transportMode)
+					.onChange(async (value) => {
+						this.plugin.settings.transportMode = value as "acp" | "hermes-api";
+						await this.plugin.saveSettings();
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Hermes API endpoint")
+			.setDesc("Gateway base URL used when transport backend is Hermes API.")
+			.addText((text) =>
+				text
+					.setPlaceholder("http://127.0.0.1:8642")
+					.setValue(this.plugin.settings.hermesApi.endpoint)
+					.onChange(async (value) => {
+						this.plugin.settings.hermesApi.endpoint = value.trim();
+						await this.plugin.saveSettings();
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Hermes API key")
+			.setDesc("Bearer token for Hermes gateway requests.")
+			.addText((text) =>
+				text
+					.setPlaceholder("sk-...")
+					.setValue(this.plugin.settings.hermesApi.apiKey)
+					.onChange(async (value) => {
+						this.plugin.settings.hermesApi.apiKey = value.trim();
+						await this.plugin.saveSettings();
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Hermes default model")
+			.setDesc("Model passed to /v1/responses when using Hermes API transport.")
+			.addText((text) =>
+				text
+					.setPlaceholder("gpt-5.3-codex")
+					.setValue(this.plugin.settings.hermesApi.defaultModel)
+					.onChange(async (value) => {
+						this.plugin.settings.hermesApi.defaultModel = value.trim();
+						await this.plugin.saveSettings();
+					}),
+			);
+
 		// ─────────────────────────────────────────────────────────────────────
 		// Mentions
 		// ─────────────────────────────────────────────────────────────────────

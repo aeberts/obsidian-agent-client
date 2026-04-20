@@ -1,12 +1,12 @@
 import { createContext, useContext } from "react";
 import type AgentClientPlugin from "../plugin";
-import type { AcpClient } from "../acp/acp-client";
+import type { IAgentTransport } from "../types/transport";
 import type { VaultService } from "../services/vault-service";
 import type { SettingsService } from "../services/settings-service";
 
 export interface ChatContextValue {
 	plugin: AgentClientPlugin;
-	acpClient: AcpClient;
+	acpClient: IAgentTransport;
 	vaultService: VaultService;
 	settingsService: SettingsService;
 }

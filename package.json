@@ -11,6 +11,8 @@
 		"format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"*.css\"",
 		"lint": "eslint .",
 		"lint:fix": "eslint . --fix",
+		"test:gateway-smoke": "python scripts/hermes_gateway_smoke.py",
+		"test:fr-sanity": "npm run build && npm run test:gateway-smoke",
 		"docs:dev": "vitepress dev docs",
 		"docs:build": "vitepress build docs",
 		"docs:preview": "vitepress preview docs"

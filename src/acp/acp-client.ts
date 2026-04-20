@@ -10,6 +10,11 @@ import type {
 	SessionResult,
 } from "../types/session";
 import type { PromptContent } from "../types/chat";
+import type {
+	AgentConfig,
+	IAgentTransport,
+	TerminalOutputResult,
+} from "../types/transport";
 import type { ProcessError } from "../types/errors";
 import { AcpTypeConverter } from "./type-converter";
 import { TerminalManager } from "./terminal-handler";
@@ -31,35 +36,12 @@ import {
 	isUserAbortedError,
 } from "../utils/error-utils";
 
-/**
- * Runtime configuration for launching an AI agent process.
- * Converted from BaseAgentSettings by toAgentConfig() in settings-service.
- */
-export interface AgentConfig {
-	id: string;
-	displayName: string;
-	command: string;
-	args: string[];
-	env?: Record<string, string>;
-	workingDirectory: string;
-}
-
-/**
- * Result of polling terminal output.
- */
-export interface TerminalOutputResult {
-	output: string;
-	truncated: boolean;
-	exitStatus: {
-		exitCode: number | null;
-		signal: string | null;
-	} | null;
-}
+export type { AgentConfig, TerminalOutputResult } from "../types/transport";
 
 /**
  * ACP client for agent communication and process lifecycle management.
  */
-export class AcpClient {
+export class AcpClient implements IAgentTransport {
 	// Connection & process
 	private connection: acp.ClientSideConnection | null = null;
 	private agentProcess: ChildProcess | null = null;

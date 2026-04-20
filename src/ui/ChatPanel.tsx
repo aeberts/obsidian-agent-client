@@ -18,7 +18,7 @@ import { ChangeDirectoryModal } from "./ChangeDirectoryModal";
 import { getLogger } from "../utils/logger";
 
 // Adapter imports
-import type { AcpClient } from "../acp/acp-client";
+import type { IAgentTransport } from "../types/transport";
 
 // Context imports
 import { useChatContext } from "./ChatContext";
@@ -240,7 +240,7 @@ export function ChatPanel({
 	// ============================================================
 	// Refs
 	// ============================================================
-	const terminalClientRef = useRef<AcpClient>(acpClient);
+	const terminalClientRef = useRef<IAgentTransport>(acpClient);
 
 	// ============================================================
 	// Computed Values

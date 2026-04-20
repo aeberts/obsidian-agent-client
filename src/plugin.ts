@@ -19,6 +19,8 @@ import {
 } from "./services/settings-service";
 import { AgentClientSettingTab } from "./ui/SettingsTab";
 import { AcpClient } from "./acp/acp-client";
+import { HermesApiTransport } from "./transport/hermes-api-transport";
+import type { IAgentTransport, TransportMode } from "./types/transport";
 import {
 	sanitizeArgs,
 	normalizeEnvVars,
@@ -73,6 +75,14 @@ export interface AgentClientPluginSettings {
 	customAgents: CustomAgentSettings[];
 	/** Default agent ID for new views (renamed from activeAgentId for multi-session) */
 	defaultAgentId: string;
+	/** Transport backend selection */
+	transportMode: TransportMode;
+	/** Hermes API transport settings */
+	hermesApi: {
+		endpoint: string;
+		apiKey: string;
+		defaultModel: string;
+	};
 	autoAllowPermissions: boolean;
 	autoMentionActiveNote: boolean;
 	/** Show OS system notifications on response completion and permission requests */
@@ -147,6 +157,12 @@ const DEFAULT_SETTINGS: AgentClientPluginSettings = {
 	},
 	customAgents: [],
 	defaultAgentId: "claude-code-acp",
+	transportMode: "acp",
+	hermesApi: {
+		endpoint: "http://127.0.0.1:8642",
+		apiKey: "",
+		defaultModel: "gpt-5.3-codex",
+	},
 	autoAllowPermissions: false,
 	autoMentionActiveNote: true,
 	enableSystemNotifications: true,
@@ -192,8 +208,8 @@ export default class AgentClientPlugin extends Plugin {
 	/** Registry for all chat view containers (sidebar + floating) */
 	viewRegistry = new ChatViewRegistry();
 
-	/** Map of viewId to AcpClient for multi-session support */
-	private _acpClients: Map<string, AcpClient> = new Map();
+	/** Map of viewId to transport client for multi-session support */
+	private _acpClients: Map<string, IAgentTransport> = new Map();
 	/** Floating button container (independent from chat view instances) */
 	private floatingButton: FloatingButtonContainer | null = null;
 	/** Counter for generating unique floating chat instance IDs */
@@ -368,15 +384,19 @@ export default class AgentClientPlugin extends Plugin {
 	}
 
 	/**
-	 * Get or create an AcpClient for a specific view.
-	 * Each ChatView has its own AcpClient for independent sessions.
+	 * Get or create a transport client for a specific view.
+	 * Each ChatView has its own client for independent sessions.
 	 */
-	getOrCreateAcpClient(viewId: string): AcpClient {
-		let client = this._acpClients.get(viewId);
-		if (!client) {
-			client = new AcpClient(this);
-			this._acpClients.set(viewId, client);
+	getOrCreateAcpClient(viewId: string): IAgentTransport {
+		const existing = this._acpClients.get(viewId);
+		if (existing) {
+			return existing;
 		}
+		const client =
+			this.settings.transportMode === "hermes-api"
+				? new HermesApiTransport(this)
+				: new AcpClient(this);
+		this._acpClients.set(viewId, client);
 		return client;
 	}
 
@@ -837,6 +857,7 @@ export default class AgentClientPlugin extends Plugin {
 		const rg = obj(raw.gemini) ?? {};
 		const re = obj(raw.exportSettings) ?? {};
 		const rd = obj(raw.displaySettings) ?? {};
+		const rh = obj(raw.hermesApi) ?? {};
 
 		// Normalize custom agents
 		const customAgents = Array.isArray(raw.customAgents)
@@ -899,6 +920,12 @@ export default class AgentClientPlugin extends Plugin {
 			},
 			customAgents,
 			defaultAgentId,
+			transportMode: enumVal(raw.transportMode, ["acp", "hermes-api"], D.transportMode),
+			hermesApi: {
+				endpoint: str(rh.endpoint, D.hermesApi.endpoint),
+				apiKey: str(rh.apiKey, D.hermesApi.apiKey),
+				defaultModel: str(rh.defaultModel, D.hermesApi.defaultModel),
+			},
 			autoAllowPermissions: bool(
 				raw.autoAllowPermissions,
 				D.autoAllowPermissions,

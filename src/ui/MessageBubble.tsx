@@ -2,7 +2,7 @@ import * as React from "react";
 const { useState, useCallback } = React;
 import { setIcon } from "obsidian";
 import type { ChatMessage, MessageContent } from "../types/chat";
-import type { AcpClient } from "../acp/acp-client";
+import type { IAgentTransport } from "../types/transport";
 import type AgentClientPlugin from "../plugin";
 import { MarkdownRenderer } from "./shared/MarkdownRenderer";
 import { TerminalBlock } from "./TerminalBlock";
@@ -154,7 +154,7 @@ interface ContentBlockProps {
 	plugin: AgentClientPlugin;
 	messageId?: string;
 	messageRole?: "user" | "assistant";
-	terminalClient?: AcpClient;
+	terminalClient?: IAgentTransport;
 	/** Callback to approve a permission request */
 	onApprovePermission?: (
 		requestId: string,
@@ -289,7 +289,7 @@ function ContentBlock({
 export interface MessageBubbleProps {
 	message: ChatMessage;
 	plugin: AgentClientPlugin;
-	terminalClient?: AcpClient;
+	terminalClient?: IAgentTransport;
 	/** Callback to approve a permission request */
 	onApprovePermission?: (
 		requestId: string,

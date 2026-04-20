@@ -16,7 +16,7 @@ import type {
 	ResourceLinkPromptContent,
 } from "../types/chat";
 import type { ChatSession, SessionUpdate } from "../types/session";
-import type { AcpClient } from "../acp/acp-client";
+import type { IAgentTransport } from "../types/transport";
 import type { IVaultAccess, NoteMetadata } from "../services/vault-service";
 import type { ISettingsAccess } from "../services/settings-service";
 import type { ErrorInfo } from "../types/errors";
@@ -89,7 +89,7 @@ export interface UseAgentMessagesReturn {
 // ============================================================================
 
 export function useAgentMessages(
-	agentClient: AcpClient,
+	agentClient: IAgentTransport,
 	settingsAccess: ISettingsAccess,
 	vaultAccess: IVaultAccess & IMentionService,
 	session: ChatSession,

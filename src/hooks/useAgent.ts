@@ -9,7 +9,7 @@ import * as React from "react";
 const { useState, useCallback, useEffect, useMemo } = React;
 
 import type { SessionUpdate } from "../types/session";
-import type { AcpClient } from "../acp/acp-client";
+import type { IAgentTransport } from "../types/transport";
 import type { IVaultAccess } from "../services/vault-service";
 import type { ISettingsAccess } from "../services/settings-service";
 import type { ErrorInfo } from "../types/errors";
@@ -112,7 +112,7 @@ export interface UseAgentReturn {
  * @param initialAgentId - Optional initial agent ID (from view persistence)
  */
 export function useAgent(
-	agentClient: AcpClient,
+	agentClient: IAgentTransport,
 	settingsAccess: ISettingsAccess,
 	vaultAccess: IVaultAccess & IMentionService,
 	workingDirectory: string,
