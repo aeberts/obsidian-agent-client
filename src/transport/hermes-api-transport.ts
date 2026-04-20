@@ -1,3 +1,4 @@
+import { requestUrl, type RequestUrlParam, type RequestUrlResponse } from "obsidian";
 import type AgentClientPlugin from "../plugin";
 import type {
 	AgentCapabilities,
@@ -108,7 +109,8 @@ export class HermesApiTransport implements IAgentTransport {
 
 		const input = this.flattenPromptContent(content);
 		const model = this.getSessionModel(state) || this.defaultModel;
-		const response = await fetch(`${this.apiBase}/v1/responses`, {
+
+		const payload = await this.requestJson("/v1/responses", {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -120,14 +122,6 @@ export class HermesApiTransport implements IAgentTransport {
 				input,
 			}),
 		});
-
-		const payload = (await response.json()) as Record<string, unknown>;
-		if (!response.ok) {
-			const message =
-				((payload.error as Record<string, unknown> | undefined)?.message as string | undefined) ||
-				`Hermes API error (${response.status})`;
-			throw new Error(message);
-		}
 
 		const outputText = this.extractOutputText(payload);
 		if (outputText.length > 0) {
@@ -382,6 +376,48 @@ export class HermesApiTransport implements IAgentTransport {
 		for (const callback of this.callbacks) {
 			callback(update);
 		}
+	}
+
+	private async requestJson(
+		path: string,
+		options: Omit<RequestUrlParam, "url">,
+	): Promise<Record<string, unknown>> {
+		let response: RequestUrlResponse;
+		try {
+			response = await requestUrl({
+				url: `${this.apiBase}${path}`,
+				...options,
+			});
+		} catch (error) {
+			const maybeResponse = error as RequestUrlResponse & {
+				json?: unknown;
+				text?: string;
+				status?: number;
+			};
+			const errorPayload =
+				maybeResponse?.json && typeof maybeResponse.json === "object"
+					? (maybeResponse.json as Record<string, unknown>)
+					: {};
+			const status = maybeResponse?.status;
+			const message =
+				((errorPayload.error as Record<string, unknown> | undefined)?.message as string | undefined) ||
+				(status ? `Hermes API error (${status})` : (error as Error).message || "Hermes API request failed");
+			throw new Error(message);
+		}
+
+		const payload =
+			response.json && typeof response.json === "object"
+				? (response.json as Record<string, unknown>)
+				: {};
+
+		if (response.status >= 400) {
+			const message =
+				((payload.error as Record<string, unknown> | undefined)?.message as string | undefined) ||
+				`Hermes API error (${response.status})`;
+			throw new Error(message);
+		}
+
+		return payload;
 	}
 
 	private ensureInitialized(): void {
