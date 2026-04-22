@@ -1,3 +1,20 @@
+## FR-4 — DONE — 2026-04-22
+
+**What was built:** Non-blocking execution for local commands — vault ops post a "⟳ Running…" placeholder immediately then replace it with the result (or error) asynchronously, so the user can keep interacting. Cancellation wired into `handleStopGeneration` via a job ref.
+
+**Tests:** unit ✓ (build + tsc -noEmit) | e2e n/a (WSL/Windows smoke env-blocked, pre-existing); gateway smoke 4/4
+
+**Gate:** build ✓, gateway smoke ✓, wsl-win smoke environment-blocked (pre-existing)
+
+**Commit:** f251b21
+
+**Notes:**
+- `replaceMessage(id, msg)` added to `useAgentMessages` and exposed through `useAgent`.
+- Local path in `useChatActions.handleSendMessage` uses `void (async () => {...})()` to fire without blocking the hook.
+- `localJobRef` tracks the active job; `handleStopGeneration` marks it cancelled before calling `agent.cancelOperation`.
+
+---
+
 ## FR-3 — DONE — 2026-04-22
 
 **What was built:** Deterministic local command router that intercepts `capture`, `move`, `done`, and `status` commands in `handleSendMessage`, executes them directly against the Obsidian vault, and explicitly escalates everything else to the Hermes transport.

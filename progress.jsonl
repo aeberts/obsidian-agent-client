@@ -13,3 +13,11 @@
 {"ts":"2026-04-22T07:33:30Z","feature":"FR-3","event":"e2e_tests_na","attempt":3,"summary":"WSL/Windows UI smoke environment-blocked (OACTest Obsidian window not open); pre-existing, not FR-3 regression; gateway smoke 4/4"}
 {"ts":"2026-04-22T07:33:40Z","feature":"FR-3","event":"gate_passed","attempt":3,"summary":"Build + gateway smoke pass; wsl-win smoke blocked by missing live Obsidian window (pre-existing environment constraint)"}
 {"ts":"2026-04-22T07:33:50Z","feature":"FR-3","event":"feature_done","attempt":3,"summary":"FR-3 complete: deterministic local router live in production build; capture/move/done/status execute locally; all else escalates to Hermes transport"}
+{"ts":"2026-04-22T15:55:00Z","feature":"FR-4","event":"feature_started","attempt":1,"summary":"Started FR-4 non-blocking command execution"}
+{"ts":"2026-04-22T15:55:10Z","feature":"FR-4","event":"plan_written","attempt":1,"summary":"Plan: (1) add replaceMessage to useAgentMessages; (2) expose through useAgent; (3) make local command path non-blocking in useChatActions with status placeholder message; (4) wire cancellation via job ref into handleStopGeneration; (5) build + gate"}
+{"ts":"2026-04-22T16:08:00Z","feature":"FR-4","event":"implementation_pass_completed","attempt":1,"summary":"Added replaceMessage to useAgentMessages+useAgent; updated local command path in useChatActions to be non-blocking with status placeholder; wired cancellation via localJobRef"}
+{"ts":"2026-04-22T16:09:00Z","feature":"FR-4","event":"unit_tests_passed","attempt":1,"summary":"Build clean: tsc -noEmit + esbuild production pass"}
+{"ts":"2026-04-22T16:09:10Z","feature":"FR-4","event":"e2e_tests_na","attempt":1,"summary":"WSL/Windows UI smoke environment-blocked (pre-existing); gateway smoke 4/4"}
+{"ts":"2026-04-22T16:09:20Z","feature":"FR-4","event":"gate_passed","attempt":1,"summary":"Build + gateway smoke pass; wsl-win smoke env-blocked (pre-existing)"}
+{"ts":"2026-04-22T16:10:00Z","feature":"FR-4","event":"feature_done","attempt":1,"summary":"FR-4 complete: local commands non-blocking with job states; replaceMessage wired; cancellation via localJobRef"}
+{"ts":"2026-04-22T16:10:10Z","feature":"FR-4","event":"commit_created","attempt":1,"summary":"commit f251b21: feat(transport): FR-4 non-blocking local command execution with job states"}

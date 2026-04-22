@@ -78,7 +78,8 @@ requirements:
   notes: wsl-win smoke blocked by missing OACTest window (pre-existing env constraint, not FR-3 regression); build + gateway smoke pass
 - id: FR-4
   title: Non-blocking command execution
-  status: pending
+  status: done
+  completed_at: '2026-04-22T16:10:00.000000'
   requirement: Support queued/background execution for long-running operations with
     user-visible job states.
   acceptance_criteria:
