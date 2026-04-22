@@ -121,7 +121,8 @@ requirements:
   - npm run test:ui-smoke:wsl-win
 - id: FR-6
   title: Command surface and UX contract
-  status: pending
+  status: done
+  completed_at: '2026-04-22T17:20:00.000000'
   requirement: Define deterministic command classification and keep behavior discoverable.
   acceptance_criteria:
   - Commands clearly classified as local deterministic, Hermes roundtrip, or background-only

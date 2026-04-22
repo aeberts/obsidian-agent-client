@@ -1,3 +1,20 @@
+## FR-6 — DONE — 2026-04-22
+
+**What was built:** Gateway command discovery seam. `HermesApiTransport` calls `GET /v1/commands` at session start (`newSession`/`loadSession`/`resumeSession`) and emits `available_commands_update` if the gateway returns a list. Degrades silently on 404. Command classification contract codified in `fetchAndEmitGatewayCommands` JSDoc.
+
+**Tests:** unit ✓ (build + tsc -noEmit) | e2e ✓ (gateway smoke 4/4, WSL-Win smoke PASS)
+
+**Gate:** build ✓, gateway smoke ✓, wsl-win smoke ✓
+
+**Commit:** b1b5666
+
+**Notes:**
+- Gateway doesn't implement `/v1/commands` yet — transport degrades silently, no regression.
+- When the gateway adds the endpoint, client picks it up automatically with no further changes needed.
+- `LOCAL_COMMANDS` in `ChatPanel.tsx` remains correct for client-side deterministic commands.
+
+---
+
 ## FR-5 — DONE — 2026-04-22
 
 **What was built:** Batch inbox processing command with process-all and process-selected policies. `process inbox` marks all unchecked tasks in Inbox.md as done and moves them to Archive.md; `process inbox 1,3,5` processes by 1-based index. Progress placeholder updates mid-batch via `onProgress` → `replaceMessage`.

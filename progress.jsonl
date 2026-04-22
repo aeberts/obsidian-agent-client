@@ -29,3 +29,11 @@
 {"ts":"2026-04-22T16:39:20Z","feature":"FR-5","event":"gate_passed","attempt":1,"summary":"All gates pass: build + gateway smoke + wsl-win smoke"}
 {"ts":"2026-04-22T16:40:00Z","feature":"FR-5","event":"feature_done","attempt":1,"summary":"FR-5 complete: batch inbox processing with process-all/selected policy and live progress updates"}
 {"ts":"2026-04-22T16:40:10Z","feature":"FR-5","event":"commit_created","attempt":1,"summary":"commit eac4714: feat(transport): FR-5 batch inbox processing with progress updates"}
+{"ts":"2026-04-22T17:05:00Z","feature":"FR-6","event":"feature_started","attempt":1,"summary":"Started FR-6 command surface and UX contract"}
+{"ts":"2026-04-22T17:05:30Z","feature":"FR-6","event":"plan_written","attempt":1,"summary":"Plan: (1) add fetchAndEmitGatewayCommands to HermesApiTransport — GET /v1/commands, emit available_commands_update on 200, silent degrade on 404/error; (2) call from newSession + loadSession + resumeSession; (3) add command contract comment; (4) build + gate"}
+{"ts":"2026-04-22T17:18:00Z","feature":"FR-6","event":"implementation_pass_completed","attempt":1,"summary":"Added fetchAndEmitGatewayCommands to HermesApiTransport; wired into newSession/loadSession/resumeSession; command classification contract documented in JSDoc"}
+{"ts":"2026-04-22T17:19:00Z","feature":"FR-6","event":"unit_tests_passed","attempt":1,"summary":"Build clean: tsc -noEmit + esbuild production pass"}
+{"ts":"2026-04-22T17:19:10Z","feature":"FR-6","event":"e2e_tests_passed","attempt":1,"summary":"Gateway smoke 4/4 pass (exit 0); WSL-Win smoke PASS"}
+{"ts":"2026-04-22T17:19:20Z","feature":"FR-6","event":"gate_passed","attempt":1,"summary":"All gates pass: build + gateway smoke + wsl-win smoke"}
+{"ts":"2026-04-22T17:20:00Z","feature":"FR-6","event":"feature_done","attempt":1,"summary":"FR-6 complete: gateway command discovery seam wired; command classification contract codified"}
+{"ts":"2026-04-22T17:20:10Z","feature":"FR-6","event":"commit_created","attempt":1,"summary":"commit b1b5666: feat(transport): FR-6 gateway command discovery via /v1/commands"}
