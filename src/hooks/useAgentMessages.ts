@@ -57,6 +57,7 @@ export interface UseAgentMessagesReturn {
 	lastUserMessage: string | null;
 
 	// Message operations
+	addMessage: (message: ChatMessage) => void;
 	sendMessage: (
 		content: string,
 		options: SendMessageOptions,
@@ -410,6 +411,7 @@ export function useAgentMessages(
 		messages,
 		isSending,
 		lastUserMessage,
+		addMessage,
 		sendMessage,
 		clearMessages,
 		setInitialMessages,

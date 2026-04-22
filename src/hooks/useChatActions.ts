@@ -25,6 +25,10 @@ import { ChatExporter } from "../services/chat-exporter";
 import { getLogger } from "../utils/logger";
 import { buildFileUri } from "../utils/paths";
 import { convertWindowsPathToWsl } from "../utils/platform";
+import {
+	routeCommand,
+	executeLocalCommand,
+} from "../transport/local-command-router";
 
 // ============================================================================
 // Types
@@ -177,17 +181,40 @@ export function useChatActions(
 				}
 			}
 
-			await agent.sendMessage(content, {
-				activeNote: settings.autoMentionActiveNote
-					? suggestions.mentions.activeNote
-					: null,
-				vaultBasePath: vaultPath,
-				isAutoMentionDisabled:
-					suggestions.mentions.isAutoMentionDisabled,
-				images: images.length > 0 ? images : undefined,
-				resourceLinks:
-					resourceLinks.length > 0 ? resourceLinks : undefined,
-			});
+			// Local fast-path: deterministic task operations bypass LLM roundtrip
+			const routeDecision = routeCommand(content);
+			if (routeDecision.kind === "local") {
+				const userMsg: ChatMessage = {
+					id: crypto.randomUUID(),
+					role: "user",
+					content: [{ type: "text", text: content }],
+					timestamp: new Date(),
+				};
+				agent.addMessage(userMsg);
+				const result = await executeLocalCommand(
+					routeDecision.command,
+					plugin.app.vault,
+				);
+				const assistantMsg: ChatMessage = {
+					id: crypto.randomUUID(),
+					role: "assistant",
+					content: [{ type: "text", text: result }],
+					timestamp: new Date(),
+				};
+				agent.addMessage(assistantMsg);
+			} else {
+				await agent.sendMessage(content, {
+					activeNote: settings.autoMentionActiveNote
+						? suggestions.mentions.getActiveNoteSnapshot()
+						: null,
+					vaultBasePath: vaultPath,
+					isAutoMentionDisabled:
+						suggestions.mentions.isAutoMentionDisabled,
+					images: images.length > 0 ? images : undefined,
+					resourceLinks:
+						resourceLinks.length > 0 ? resourceLinks : undefined,
+				});
+			}
 
 			// Save session metadata locally on first message
 			if (isFirstMessage && session.sessionId) {
@@ -203,12 +230,14 @@ export function useChatActions(
 		[
 			agent.clearError,
 			agent.sendMessage,
+			agent.addMessage,
 			messages.length,
 			session.sessionId,
 			sessionHistory.saveSessionLocally,
 			logger,
+			plugin,
 			settings.autoMentionActiveNote,
-			suggestions.mentions.activeNote,
+			suggestions.mentions.getActiveNoteSnapshot,
 			suggestions.mentions.isAutoMentionDisabled,
 			shouldConvertToWsl,
 			vaultPath,
