@@ -14,6 +14,44 @@ import type { PromptContent } from "../types/chat";
 import type { AgentConfig, IAgentTransport, TerminalOutputResult } from "../types/transport";
 import type { SlashCommand } from "../types/session";
 
+/**
+ * Messaging-platform slash commands built into the Hermes gateway.
+ * These are drawn from the central COMMAND_REGISTRY (hermes_cli/commands.py)
+ * and are available to every messaging adapter (Discord, Telegram, Slack, OAC, etc.).
+ * Used as fallback when the gateway does not yet expose GET /v1/commands.
+ */
+const HERMES_MESSAGING_COMMANDS: SlashCommand[] = [
+	{ name: "background", description: "Run a prompt in an independent background session", hint: "prompt" },
+	{ name: "queue", description: "Queue a prompt for background execution", hint: "prompt" },
+	{ name: "plan", description: "Load the planning skill for markdown planning", hint: "request" },
+	{ name: "new", description: "Start a fresh session with a new ID" },
+	{ name: "reset", description: "Alias for /new — start fresh session" },
+	{ name: "status", description: "Display current session information" },
+	{ name: "stop", description: "Terminate background processes" },
+	{ name: "retry", description: "Resend the last message to the agent" },
+	{ name: "undo", description: "Remove the last user/assistant exchange" },
+	{ name: "title", description: "Name the current session", hint: "name" },
+	{ name: "resume", description: "Restore a previously named session", hint: "name" },
+	{ name: "compress", description: "Summarise context with optional focus", hint: "focus" },
+	{ name: "model", description: "Switch or display the active model", hint: "provider:model" },
+	{ name: "provider", description: "List providers and current selection" },
+	{ name: "fast", description: "Toggle fast processing mode", hint: "normal|fast|status" },
+	{ name: "reasoning", description: "Manage reasoning effort and display", hint: "level|show|hide" },
+	{ name: "usage", description: "Show token consumption and cost breakdown" },
+	{ name: "insights", description: "Display analytics", hint: "days" },
+	{ name: "rollback", description: "List or restore filesystem checkpoints", hint: "number" },
+	{ name: "snapshot", description: "Manage state snapshots", hint: "create|restore|prune" },
+	{ name: "yolo", description: "Skip dangerous command approval prompts" },
+	{ name: "reload-mcp", description: "Refresh MCP server configuration" },
+	{ name: "reload", description: "Refresh environment variables without restart" },
+	{ name: "approve", description: "Approve a pending dangerous command", hint: "session|always" },
+	{ name: "deny", description: "Deny a pending dangerous command" },
+	{ name: "debug", description: "Upload a diagnostic report" },
+	{ name: "help", description: "Display command reference" },
+	{ name: "personality", description: "Apply a predefined personality overlay", hint: "name" },
+	{ name: "voice", description: "Control voice recording and playback", hint: "on|off|tts|status" },
+];
+
 interface HermesSessionState {
 	sessionId: string;
 	cwd: string;
@@ -412,7 +450,11 @@ export class HermesApiTransport implements IAgentTransport {
 				headers: { Authorization: `Bearer ${this.apiKey}` },
 			});
 			const raw = payload.commands;
-			if (!Array.isArray(raw)) return;
+			if (!Array.isArray(raw)) {
+				// Endpoint exists but returned no commands — emit built-in list.
+				this.emit({ type: "available_commands_update", sessionId, commands: HERMES_MESSAGING_COMMANDS });
+				return;
+			}
 			const commands: SlashCommand[] = raw
 				.filter(
 					(c): c is Record<string, unknown> =>
@@ -426,11 +468,15 @@ export class HermesApiTransport implements IAgentTransport {
 							? (c.hint as string | null | undefined)
 							: undefined,
 				}));
-			if (commands.length > 0) {
-				this.emit({ type: "available_commands_update", sessionId, commands });
-			}
+			this.emit({
+				type: "available_commands_update",
+				sessionId,
+				commands: commands.length > 0 ? commands : HERMES_MESSAGING_COMMANDS,
+			});
 		} catch {
-			// Gateway does not implement /v1/commands yet — degrade silently.
+			// Gateway does not implement /v1/commands yet — fall back to built-in
+			// messaging-platform command list (same set Discord/Telegram/Slack get).
+			this.emit({ type: "available_commands_update", sessionId, commands: HERMES_MESSAGING_COMMANDS });
 		}
 	}
 
