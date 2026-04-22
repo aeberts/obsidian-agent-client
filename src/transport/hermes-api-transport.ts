@@ -1,5 +1,6 @@
 import { requestUrl, type RequestUrlParam, type RequestUrlResponse } from "obsidian";
 import type AgentClientPlugin from "../plugin";
+import { getLogger } from "../utils/logger";
 import type {
 	AgentCapabilities,
 	InitializeResult,
@@ -11,6 +12,7 @@ import type {
 } from "../types/session";
 import type { PromptContent } from "../types/chat";
 import type { AgentConfig, IAgentTransport, TerminalOutputResult } from "../types/transport";
+import type { SlashCommand } from "../types/session";
 
 interface HermesSessionState {
 	sessionId: string;
@@ -22,6 +24,7 @@ interface HermesSessionState {
 
 export class HermesApiTransport implements IAgentTransport {
 	private plugin: AgentClientPlugin;
+	private logger = getLogger();
 	private initialized = false;
 	private currentAgentId: string | null = null;
 	private apiBase = "http://127.0.0.1:8642";
@@ -90,6 +93,7 @@ export class HermesApiTransport implements IAgentTransport {
 			],
 		};
 		this.sessionStates.set(sessionId, state);
+		void this.fetchAndEmitGatewayCommands(sessionId);
 		return {
 			sessionId,
 			configOptions: state.configOptions,
@@ -109,6 +113,9 @@ export class HermesApiTransport implements IAgentTransport {
 
 		const input = this.flattenPromptContent(content);
 		const model = this.getSessionModel(state) || this.defaultModel;
+		this.logger.log(
+			`[HermesApiTransport] sendPrompt start session=${sessionId} model=${model} inputChars=${input.length}`,
+		);
 
 		const payload = await this.requestJson("/v1/responses", {
 			method: "POST",
@@ -124,14 +131,25 @@ export class HermesApiTransport implements IAgentTransport {
 		});
 
 		const outputText = this.extractOutputText(payload);
+		this.logger.log(
+			`[HermesApiTransport] sendPrompt response session=${sessionId} outputChars=${outputText.length}`,
+		);
 		if (outputText.length > 0) {
-			for (const chunk of this.chunkText(outputText, 140)) {
+			const chunks = this.chunkText(outputText, 140);
+			this.logger.log(
+				`[HermesApiTransport] emitting ${chunks.length} chunk(s) for session=${sessionId}`,
+			);
+			for (const chunk of chunks) {
 				this.emit({
 					type: "agent_message_chunk",
 					sessionId,
 					text: chunk,
 				});
 			}
+		} else {
+			this.logger.warn(
+				`[HermesApiTransport] empty output_text for session=${sessionId}; payload keys=${Object.keys(payload).join(",")}`,
+			);
 		}
 
 		const usage = payload.usage as
@@ -237,11 +255,13 @@ export class HermesApiTransport implements IAgentTransport {
 
 	async loadSession(sessionId: string, cwd: string): Promise<SessionResult> {
 		const state = this.getSessionState(sessionId, cwd);
+		void this.fetchAndEmitGatewayCommands(state.sessionId);
 		return { sessionId: state.sessionId, configOptions: state.configOptions };
 	}
 
 	async resumeSession(sessionId: string, cwd: string): Promise<SessionResult> {
 		const state = this.getSessionState(sessionId, cwd);
+		void this.fetchAndEmitGatewayCommands(state.sessionId);
 		return { sessionId: state.sessionId, configOptions: state.configOptions };
 	}
 
@@ -372,6 +392,48 @@ export class HermesApiTransport implements IAgentTransport {
 		];
 	}
 
+	/**
+	 * Fetch slash commands advertised by the Hermes gateway and emit an
+	 * available_commands_update so the dropdown reflects gateway-sourced commands.
+	 *
+	 * Command discovery contract:
+	 *   - Local deterministic commands (capture/move/done/status/process-inbox)
+	 *     are registered statically in ChatPanel and never come from this call.
+	 *   - Hermes-roundtrip commands are advertised by the gateway via GET /v1/commands
+	 *     and flow through this method → session.availableCommands → dropdown.
+	 *   - Background-only operations are not slash commands and are not advertised here.
+	 *
+	 * Degrades silently if the gateway does not implement the endpoint yet (404).
+	 */
+	private async fetchAndEmitGatewayCommands(sessionId: string): Promise<void> {
+		try {
+			const payload = await this.requestJson("/v1/commands", {
+				method: "GET",
+				headers: { Authorization: `Bearer ${this.apiKey}` },
+			});
+			const raw = payload.commands;
+			if (!Array.isArray(raw)) return;
+			const commands: SlashCommand[] = raw
+				.filter(
+					(c): c is Record<string, unknown> =>
+						c !== null && typeof c === "object" && typeof c.name === "string",
+				)
+				.map((c) => ({
+					name: c.name as string,
+					description: typeof c.description === "string" ? c.description : "",
+					hint:
+						typeof c.hint === "string" || c.hint == null
+							? (c.hint as string | null | undefined)
+							: undefined,
+				}));
+			if (commands.length > 0) {
+				this.emit({ type: "available_commands_update", sessionId, commands });
+			}
+		} catch {
+			// Gateway does not implement /v1/commands yet — degrade silently.
+		}
+	}
+
 	private emit(update: SessionUpdate): void {
 		for (const callback of this.callbacks) {
 			callback(update);
@@ -384,10 +446,16 @@ export class HermesApiTransport implements IAgentTransport {
 	): Promise<Record<string, unknown>> {
 		let response: RequestUrlResponse;
 		try {
+			this.logger.log(
+				`[HermesApiTransport] request ${options.method ?? "GET"} ${this.apiBase}${path}`,
+			);
 			response = await requestUrl({
 				url: `${this.apiBase}${path}`,
 				...options,
 			});
+			this.logger.log(
+				`[HermesApiTransport] response status=${response.status} path=${path}`,
+			);
 		} catch (error) {
 			const maybeResponse = error as RequestUrlResponse & {
 				json?: unknown;
@@ -402,6 +470,9 @@ export class HermesApiTransport implements IAgentTransport {
 			const message =
 				((errorPayload.error as Record<string, unknown> | undefined)?.message as string | undefined) ||
 				(status ? `Hermes API error (${status})` : (error as Error).message || "Hermes API request failed");
+			this.logger.error(
+				`[HermesApiTransport] request failed path=${path} status=${status ?? "n/a"} message=${message}`,
+			);
 			throw new Error(message);
 		}
 
