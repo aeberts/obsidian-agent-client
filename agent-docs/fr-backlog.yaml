@@ -102,7 +102,8 @@ requirements:
   - npm run test:ui-smoke:wsl-win
 - id: FR-5
   title: Batch inbox processing
-  status: pending
+  status: done
+  completed_at: '2026-04-22T16:40:00.000000'
   requirement: Provide async-capable batch workflow for inbox processing with visible
     status and policy toggle.
   acceptance_criteria:

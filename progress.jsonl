@@ -21,3 +21,11 @@
 {"ts":"2026-04-22T16:09:20Z","feature":"FR-4","event":"gate_passed","attempt":1,"summary":"Build + gateway smoke pass; wsl-win smoke env-blocked (pre-existing)"}
 {"ts":"2026-04-22T16:10:00Z","feature":"FR-4","event":"feature_done","attempt":1,"summary":"FR-4 complete: local commands non-blocking with job states; replaceMessage wired; cancellation via localJobRef"}
 {"ts":"2026-04-22T16:10:10Z","feature":"FR-4","event":"commit_created","attempt":1,"summary":"commit f251b21: feat(transport): FR-4 non-blocking local command execution with job states"}
+{"ts":"2026-04-22T16:25:00Z","feature":"FR-5","event":"feature_started","attempt":1,"summary":"Started FR-5 batch inbox processing"}
+{"ts":"2026-04-22T16:28:00Z","feature":"FR-5","event":"plan_written","attempt":1,"summary":"Plan: (1) add BatchInboxCommand + process inbox parser to local-command-router; (2) add executeBatchInbox with progress callback; (3) wire onProgress through executeLocalCommand into useChatActions status placeholder; (4) build + gate"}
+{"ts":"2026-04-22T16:38:00Z","feature":"FR-5","event":"implementation_pass_completed","attempt":1,"summary":"Added BatchInboxCommand + executeBatchInbox with all/selected policy; onProgress wired through executeLocalCommand into useChatActions"}
+{"ts":"2026-04-22T16:39:00Z","feature":"FR-5","event":"unit_tests_passed","attempt":1,"summary":"Build clean: tsc -noEmit + esbuild production pass"}
+{"ts":"2026-04-22T16:39:10Z","feature":"FR-5","event":"e2e_tests_passed","attempt":1,"summary":"Gateway smoke 4/4 pass; WSL-Win smoke 6/6 pass (full roundtrip)"}
+{"ts":"2026-04-22T16:39:20Z","feature":"FR-5","event":"gate_passed","attempt":1,"summary":"All gates pass: build + gateway smoke + wsl-win smoke"}
+{"ts":"2026-04-22T16:40:00Z","feature":"FR-5","event":"feature_done","attempt":1,"summary":"FR-5 complete: batch inbox processing with process-all/selected policy and live progress updates"}
+{"ts":"2026-04-22T16:40:10Z","feature":"FR-5","event":"commit_created","attempt":1,"summary":"commit eac4714: feat(transport): FR-5 batch inbox processing with progress updates"}

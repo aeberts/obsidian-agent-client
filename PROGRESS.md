@@ -1,3 +1,20 @@
+## FR-5 — DONE — 2026-04-22
+
+**What was built:** Batch inbox processing command with process-all and process-selected policies. `process inbox` marks all unchecked tasks in Inbox.md as done and moves them to Archive.md; `process inbox 1,3,5` processes by 1-based index. Progress placeholder updates mid-batch via `onProgress` → `replaceMessage`.
+
+**Tests:** unit ✓ (build + tsc -noEmit) | e2e ✓ (gateway smoke 4/4, WSL-Win smoke 6/6)
+
+**Gate:** build ✓, gateway smoke ✓, wsl-win smoke ✓
+
+**Commit:** eac4714
+
+**Notes:**
+- `BatchInboxCommand` added to `ParsedCommand` union; parsed by `BATCH_INBOX_RE`.
+- `executeLocalCommand` now accepts optional `onProgress: (msg: string) => void` — only used by batch-inbox, transparent to other commands.
+- Archive destination hardcoded to `Archive.md` — can be made configurable in FR-6 UX contract pass.
+
+---
+
 ## FR-4 — DONE — 2026-04-22
 
 **What was built:** Non-blocking execution for local commands — vault ops post a "⟳ Running…" placeholder immediately then replace it with the result (or error) asynchronously, so the user can keep interacting. Cancellation wired into `handleStopGeneration` via a job ref.
