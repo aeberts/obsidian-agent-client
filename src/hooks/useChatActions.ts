@@ -214,6 +214,17 @@ export function useChatActions(
 						resultText = await executeLocalCommand(
 							routeDecision.command,
 							plugin.app.vault,
+							undefined,
+							(progressMsg) => {
+								if (!job.cancelled) {
+									agent.replaceMessage(statusMsgId, {
+										id: statusMsgId,
+										role: "assistant",
+										content: [{ type: "text", text: progressMsg }],
+										timestamp: new Date(),
+									});
+								}
+							},
 						);
 					} catch (err) {
 						resultText = `Error: ${err instanceof Error ? err.message : String(err)}`;

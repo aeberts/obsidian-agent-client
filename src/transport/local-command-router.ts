@@ -1,15 +1,17 @@
 /**
- * Local Command Router — FR-3
+ * Local Command Router — FR-3/FR-5
  *
  * Provides a deterministic fast-path for simple task operations that do not
  * require an LLM roundtrip. Commands that are ambiguous or complex are
  * explicitly escalated to the Hermes transport by returning { kind: "escalate" }.
  *
  * Recognized local commands:
- *   capture <text>        — append task to inbox file
- *   move <task> to <dest> — move task line between notes
- *   done <task>           — mark task as done
- *   status <task> <s>     — set task status (done | todo | in-progress)
+ *   capture <text>           — append task to inbox file
+ *   move <task> to <dest>    — move task line between notes
+ *   done <task>              — mark task as done
+ *   status <task> <s>        — set task status (done | todo | in-progress)
+ *   process inbox            — process all unchecked tasks in inbox (process-all)
+ *   process inbox 1,3,5      — process selected tasks by 1-based index (process-selected)
  *
  * Everything else → { kind: "escalate" }
  */
@@ -37,7 +39,17 @@ export interface StatusCommand {
 	newStatus: "done" | "todo" | "in-progress";
 }
 
-export type ParsedCommand = CaptureCommand | MoveCommand | StatusCommand;
+export interface BatchInboxCommand {
+	type: "batch-inbox";
+	policy: "all" | "selected";
+	indices?: number[]; // 1-based, only meaningful when policy === "selected"
+}
+
+export type ParsedCommand =
+	| CaptureCommand
+	| MoveCommand
+	| StatusCommand
+	| BatchInboxCommand;
 
 export type RouteDecision =
 	| { kind: "local"; command: ParsedCommand }
@@ -52,6 +64,8 @@ const MOVE_RE = /^(?:\/move|move)\s+(.+?)\s+\bto\b\s+(.+)/i;
 const DONE_RE = /^(?:\/done|done)\s+(.+)/i;
 const STATUS_RE =
 	/^(?:\/status|status)\s+(.+?)\s+(done|todo|in[\s-]?progress)\s*$/i;
+const BATCH_INBOX_RE =
+	/^(?:\/process-inbox|process\s+inbox)(?:\s+(all|[\d,\s]+))?$/i;
 
 // ============================================================================
 // Router
@@ -107,6 +121,25 @@ export function routeCommand(input: string): RouteDecision {
 		};
 	}
 
+	m = trimmed.match(BATCH_INBOX_RE);
+	if (m) {
+		const arg = m[1]?.trim();
+		if (!arg || arg.toLowerCase() === "all") {
+			return {
+				kind: "local",
+				command: { type: "batch-inbox", policy: "all" },
+			};
+		}
+		const indices = arg
+			.split(/[\s,]+/)
+			.map(Number)
+			.filter((n) => n > 0 && Number.isInteger(n));
+		return {
+			kind: "local",
+			command: { type: "batch-inbox", policy: "selected", indices },
+		};
+	}
+
 	return { kind: "escalate" };
 }
 
@@ -117,12 +150,14 @@ export function routeCommand(input: string): RouteDecision {
 /**
  * Execute a locally-routed command against the Obsidian vault.
  *
+ * @param onProgress - Optional callback for live status updates (batch commands only).
  * @returns Human-readable result string shown as an assistant message.
  */
 export async function executeLocalCommand(
 	command: ParsedCommand,
 	vault: Vault,
 	inboxPath = "Inbox.md",
+	onProgress?: (msg: string) => void,
 ): Promise<string> {
 	switch (command.type) {
 		case "capture":
@@ -131,6 +166,8 @@ export async function executeLocalCommand(
 			return moveTask(command, vault);
 		case "status":
 			return updateStatus(command, vault);
+		case "batch-inbox":
+			return executeBatchInbox(command, vault, inboxPath, onProgress);
 	}
 }
 
@@ -215,4 +252,69 @@ async function updateStatus(
 	}
 
 	return `Task not found: "${command.task}"`;
+}
+
+async function executeBatchInbox(
+	command: BatchInboxCommand,
+	vault: Vault,
+	inboxPath: string,
+	onProgress?: (msg: string) => void,
+): Promise<string> {
+	const inboxFile = vault.getAbstractFileByPath(inboxPath);
+	if (!(inboxFile instanceof TFile)) {
+		return `Inbox not found: ${inboxPath}`;
+	}
+
+	const content = await vault.read(inboxFile);
+	const lines = content.split("\n");
+
+	// Collect all unchecked task lines with their original indices
+	const unchecked = lines
+		.map((line, i) => ({ line, i }))
+		.filter(({ line }) => /^- \[ \]/.test(line));
+
+	if (unchecked.length === 0) {
+		return "Inbox is empty — nothing to process.";
+	}
+
+	// Apply policy: all or selected by 1-based index
+	const toProcess =
+		command.policy === "selected" && command.indices
+			? command.indices
+					.map((n) => unchecked[n - 1])
+					.filter((t): t is (typeof unchecked)[number] => t !== undefined)
+			: unchecked;
+
+	if (toProcess.length === 0) {
+		return "No matching tasks selected.";
+	}
+
+	onProgress?.(`⟳ Processing 0/${toProcess.length} tasks…`);
+
+	const processedSet = new Set(toProcess.map((t) => t.i));
+	const archiveLines: string[] = [];
+
+	// Mark done and collect for archive, preserving other lines
+	const newLines: string[] = [];
+	for (const [i, line] of lines.entries()) {
+		if (processedSet.has(i)) {
+			archiveLines.push(line.replace(/^(- \[) \]/, "$1x]"));
+		} else {
+			newLines.push(line);
+		}
+	}
+
+	await vault.modify(inboxFile, newLines.join("\n"));
+
+	// Append processed tasks to Archive.md
+	const archivePath = "Archive.md";
+	const archiveFile = vault.getAbstractFileByPath(archivePath);
+	if (archiveFile instanceof TFile) {
+		await vault.append(archiveFile, `\n${archiveLines.join("\n")}`);
+	} else {
+		await vault.create(archivePath, `${archiveLines.join("\n")}\n`);
+	}
+
+	const n = toProcess.length;
+	return `Processed ${n} task${n === 1 ? "" : "s"} — moved to ${archivePath}.`;
 }
