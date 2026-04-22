@@ -77,6 +77,7 @@ export interface UseAgentReturn {
 
 	// Message operations
 	addMessage: (message: ChatMessage) => void;
+	replaceMessage: (id: string, updated: ChatMessage) => void;
 	sendMessage: (
 		content: string,
 		options: SendMessageOptions,
@@ -200,6 +201,7 @@ export function useAgent(
 
 			// Message operations
 			addMessage: agentMessages.addMessage,
+			replaceMessage: agentMessages.replaceMessage,
 			sendMessage: agentMessages.sendMessage,
 			clearMessages: agentMessages.clearMessages,
 			setInitialMessages: agentMessages.setInitialMessages,
@@ -232,6 +234,7 @@ export function useAgent(
 			agentSession.setModel,
 			agentSession.setConfigOption,
 			agentMessages.addMessage,
+			agentMessages.replaceMessage,
 			agentMessages.sendMessage,
 			agentMessages.clearMessages,
 			agentMessages.setInitialMessages,

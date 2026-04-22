@@ -58,6 +58,7 @@ export interface UseAgentMessagesReturn {
 
 	// Message operations
 	addMessage: (message: ChatMessage) => void;
+	replaceMessage: (id: string, updated: ChatMessage) => void;
 	sendMessage: (
 		content: string,
 		options: SendMessageOptions,
@@ -164,6 +165,13 @@ export function useAgentMessages(
 	const addMessage = useCallback((message: ChatMessage): void => {
 		setMessages((prev) => [...prev, message]);
 	}, []);
+
+	const replaceMessage = useCallback(
+		(id: string, updated: ChatMessage): void => {
+			setMessages((prev) => prev.map((m) => (m.id === id ? updated : m)));
+		},
+		[],
+	);
 
 	const setIgnoreUpdates = useCallback((ignore: boolean): void => {
 		ignoreUpdatesRef.current = ignore;
@@ -412,6 +420,7 @@ export function useAgentMessages(
 		isSending,
 		lastUserMessage,
 		addMessage,
+		replaceMessage,
 		sendMessage,
 		clearMessages,
 		setInitialMessages,

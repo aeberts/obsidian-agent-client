@@ -5,7 +5,7 @@
  * config changes, and related UI state (restoredMessage, agentUpdateNotification).
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { Notice, Platform } from "obsidian";
 
 import type AgentClientPlugin from "../plugin";
@@ -92,6 +92,9 @@ export function useChatActions(
 	const [restoredMessage, setRestoredMessage] = useState<string | null>(null);
 	const [agentUpdateNotification, setAgentUpdateNotification] =
 		useState<AgentUpdateNotification | null>(null);
+
+	// Tracks the in-flight local command job so handleStopGeneration can cancel it
+	const localJobRef = useRef<{ cancelled: boolean } | null>(null);
 
 	// ============================================================
 	// Auto-export
@@ -191,17 +194,43 @@ export function useChatActions(
 					timestamp: new Date(),
 				};
 				agent.addMessage(userMsg);
-				const result = await executeLocalCommand(
-					routeDecision.command,
-					plugin.app.vault,
-				);
-				const assistantMsg: ChatMessage = {
-					id: crypto.randomUUID(),
+
+				// Post a running-state placeholder immediately so the user can
+				// keep interacting while the vault op executes in the background.
+				const statusMsgId = crypto.randomUUID();
+				agent.addMessage({
+					id: statusMsgId,
 					role: "assistant",
-					content: [{ type: "text", text: result }],
+					content: [{ type: "text", text: "⟳ Running…" }],
 					timestamp: new Date(),
-				};
-				agent.addMessage(assistantMsg);
+				});
+
+				const job = { cancelled: false };
+				localJobRef.current = job;
+
+				void (async () => {
+					let resultText: string;
+					try {
+						resultText = await executeLocalCommand(
+							routeDecision.command,
+							plugin.app.vault,
+						);
+					} catch (err) {
+						resultText = `Error: ${err instanceof Error ? err.message : String(err)}`;
+					}
+					localJobRef.current = null;
+					agent.replaceMessage(statusMsgId, {
+						id: statusMsgId,
+						role: "assistant",
+						content: [
+							{
+								type: "text",
+								text: job.cancelled ? "✕ Cancelled" : resultText,
+							},
+						],
+						timestamp: new Date(),
+					});
+				})();
 			} else {
 				await agent.sendMessage(content, {
 					activeNote: settings.autoMentionActiveNote
@@ -231,6 +260,7 @@ export function useChatActions(
 			agent.clearError,
 			agent.sendMessage,
 			agent.addMessage,
+			agent.replaceMessage,
 			messages.length,
 			session.sessionId,
 			sessionHistory.saveSessionLocally,
@@ -246,6 +276,11 @@ export function useChatActions(
 
 	const handleStopGeneration = useCallback(async () => {
 		logger.log("Cancelling current operation...");
+		// Cancel any in-flight local command job
+		if (localJobRef.current) {
+			localJobRef.current.cancelled = true;
+			localJobRef.current = null;
+		}
 		const lastMessage = agent.lastUserMessage;
 		await agent.cancelOperation();
 		if (lastMessage) {
