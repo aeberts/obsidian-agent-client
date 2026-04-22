@@ -63,7 +63,7 @@ const CAPTURE_RE = /^(?:\/capture|capture:?)\s+(.+)/i;
 const MOVE_RE = /^(?:\/move|move)\s+(.+?)\s+\bto\b\s+(.+)/i;
 const DONE_RE = /^(?:\/done|done)\s+(.+)/i;
 const STATUS_RE =
-	/^(?:\/status|status)\s+(.+?)\s+(done|todo|in[\s-]?progress)\s*$/i;
+	/^(?:\/task-status|task-status|\/status|status)\s+(.+?)\s+(done|todo|in[\s-]?progress)\s*$/i;
 const BATCH_INBOX_RE =
 	/^(?:\/process-inbox|process\s+inbox)(?:\s+(all|[\d,\s]+))?$/i;
 

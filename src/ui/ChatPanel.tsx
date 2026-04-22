@@ -60,7 +60,9 @@ const LOCAL_COMMANDS: SlashCommand[] = [
 		hint: "task text",
 	},
 	{
-		name: "status",
+		// "status" is intentionally omitted here — Hermes owns /status (session info).
+		// The local task-status router still handles "status <task> <state>" when typed in full.
+		name: "task-status",
 		description: "Set task status (done | todo | in-progress)",
 		hint: "task text done|todo|in-progress",
 	},
