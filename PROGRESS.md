@@ -16,6 +16,21 @@ Reload the plugin after each deploy: disable/re-enable in Obsidian settings, or
 
 ---
 
+## FR-9 — DONE — 2026-04-23
+
+**What was built:** SSE streaming via `POST /v1/responses` with `stream: true`. Tokens arrive progressively via `fetch()` ReadableStream. `consumeSseStream` parses SSE events and emits `agent_message_chunk` per `response.output_text.delta`. Terminates on `response.completed` (also emits `usage_update`). Fallback to blocking `requestUrl` path if streaming unavailable.
+
+**Root causes fixed during development:**
+- Runs API approach had a race condition (run completed before SSE connect) → switched to direct POST streaming
+- `response.output_text.done` carries full accumulated text in `text` field → generic fallback in `extractSseText` was re-emitting entire response as duplicate → fixed by short-circuiting all `response.*` events except `response.output_text.delta`
+- Server keeps SSE connection open after final event → `consumeSseStream` now returns on `response.completed` instead of waiting for EOF
+
+**Tests:** unit ✓ (build + tsc -noEmit) | gateway smoke ✓ (4/4) | user test ✓ (2026-04-23)
+
+**Gate:** build ✓, gateway smoke ✓, user test ✓
+
+---
+
 ## NEXT SESSION — 2026-04-22
 
 ### Status

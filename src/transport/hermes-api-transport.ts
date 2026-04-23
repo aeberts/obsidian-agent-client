@@ -123,6 +123,7 @@ export class HermesApiTransport implements IAgentTransport {
 	private sessionStates = new Map<string, HermesSessionState>();
 	private callbacks = new Set<(update: SessionUpdate) => void>();
 	private cancelledSessions = new Set<string>();
+	private sessionAbortControllers = new Map<string, AbortController>();
 
 	constructor(plugin: AgentClientPlugin) {
 		this.plugin = plugin;
@@ -205,7 +206,6 @@ export class HermesApiTransport implements IAgentTransport {
 			);
 		}
 
-		// Clear any stale cancel flag from a previous send on this session
 		this.cancelledSessions.delete(sessionId);
 
 		const input = this.flattenPromptContent(content);
@@ -214,6 +214,153 @@ export class HermesApiTransport implements IAgentTransport {
 			`[HermesApiTransport] sendPrompt start session=${sessionId} model=${model} inputChars=${input.length}`,
 		);
 
+		const streamed = await this.trySendViaResponsesStream(sessionId, input, model);
+		if (streamed) {
+			state.updatedAt = new Date().toISOString();
+			return;
+		}
+
+		// Fallback: blocking /v1/responses path
+		await this.sendViaResponses(sessionId, input, model, state);
+	}
+
+	async cancel(sessionId: string): Promise<void> {
+		this.cancelledSessions.add(sessionId);
+		const ctrl = this.sessionAbortControllers.get(sessionId);
+		if (ctrl) {
+			ctrl.abort();
+			this.sessionAbortControllers.delete(sessionId);
+		}
+	}
+
+	/**
+	 * Try to send via POST /v1/responses with stream:true.
+	 * Returns true if the stream was handled (including cancelled), false if
+	 * streaming is unavailable and the caller should fall back to blocking mode.
+	 */
+	private async trySendViaResponsesStream(
+		sessionId: string,
+		input: string,
+		model: string,
+	): Promise<boolean> {
+		const abortCtrl = new AbortController();
+		this.sessionAbortControllers.set(sessionId, abortCtrl);
+		try {
+			const response = await fetch(`${this.apiBase}/v1/responses`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${this.liveApiKey}`,
+				},
+				body: JSON.stringify({ model, conversation: sessionId, input, stream: true }),
+				signal: abortCtrl.signal,
+			});
+			if (!response.ok || !response.body) return false;
+
+			await this.consumeSseStream(response.body, sessionId);
+			return true;
+		} catch (err) {
+			if ((err as Error).name === "AbortError") return true; // cancelled — handled
+			this.logger.warn(`[HermesApiTransport] streaming /v1/responses failed, falling back: ${String(err)}`);
+			return false;
+		} finally {
+			this.sessionAbortControllers.delete(sessionId);
+		}
+	}
+
+	/** Read an SSE stream and emit agent_message_chunk / usage_update events. */
+	private async consumeSseStream(
+		body: ReadableStream<Uint8Array>,
+		sessionId: string,
+	): Promise<void> {
+		const reader = body.getReader();
+		const decoder = new TextDecoder();
+		let buffer = "";
+
+		try {
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+
+				buffer += decoder.decode(value, { stream: true });
+				const lines = buffer.split("\n");
+				buffer = lines.pop() ?? "";
+
+				for (const line of lines) {
+					if (!line.startsWith("data: ")) continue;
+					const data = line.slice(6).trim();
+					if (data === "[DONE]") return;
+
+					let event: Record<string, unknown>;
+					try {
+						event = JSON.parse(data) as Record<string, unknown>;
+					} catch {
+						continue;
+					}
+
+					const text = this.extractSseText(event);
+					if (text) {
+						this.emit({ type: "agent_message_chunk", sessionId, text });
+					}
+
+					// response.completed is the terminal event — emit usage and stop
+					const type = event.type as string | undefined;
+					if (type === "response.completed") {
+						const resp = event.response as Record<string, unknown> | undefined;
+						const usage = resp?.usage as
+							| { input_tokens?: number; output_tokens?: number; total_tokens?: number }
+							| undefined;
+						if (usage?.total_tokens) {
+							this.emit({ type: "usage_update", sessionId, size: usage.total_tokens, used: usage.total_tokens });
+						}
+						return;
+					}
+				}
+			}
+		} finally {
+			reader.releaseLock();
+		}
+	}
+
+	/** Extract text from an SSE event, handling multiple known formats. */
+	private extractSseText(event: Record<string, unknown>): string | null {
+		const type = event.type as string | undefined;
+
+		// OpenAI Responses API streaming — only delta events carry new text;
+		// done/completed events carry the full accumulated text in other fields
+		// which must NOT be re-emitted as chunks.
+		if (type?.startsWith("response.")) {
+			if (type === "response.output_text.delta" && typeof event.delta === "string") {
+				return event.delta;
+			}
+			return null;
+		}
+		// OpenAI Chat Completions streaming
+		const choices = event.choices as Array<Record<string, unknown>> | undefined;
+		if (Array.isArray(choices) && choices.length > 0) {
+			const delta = choices[0].delta as Record<string, unknown> | undefined;
+			if (typeof delta?.content === "string") return delta.content;
+		}
+		// Generic token/text event
+		if (typeof event.text === "string" && event.text.length > 0) return event.text;
+		// Nested delta.text
+		const delta = event.delta as Record<string, unknown> | undefined;
+		if (typeof delta?.text === "string") return delta.text;
+
+		// Log unrecognised non-response events so we can identify new formats
+		if (type) {
+			this.logger.log(`[HermesApiTransport] unhandled SSE event type="${type}"`);
+		}
+		return null;
+	}
+
+	/** Blocking /v1/responses fallback path (used when Runs API is unavailable). */
+	private async sendViaResponses(
+		sessionId: string,
+		input: string,
+		model: string,
+		state: HermesSessionState,
+	): Promise<void> {
 		let payload: Record<string, unknown>;
 		try {
 			payload = await this.requestJson("/v1/responses", {
@@ -222,11 +369,7 @@ export class HermesApiTransport implements IAgentTransport {
 					"Content-Type": "application/json",
 					Authorization: `Bearer ${this.liveApiKey}`,
 				},
-				body: JSON.stringify({
-					model,
-					conversation: sessionId,
-					input,
-				}),
+				body: JSON.stringify({ model, conversation: sessionId, input }),
 			});
 		} catch (err) {
 			if (this.cancelledSessions.has(sessionId)) {
@@ -236,7 +379,6 @@ export class HermesApiTransport implements IAgentTransport {
 			throw err;
 		}
 
-		// Drop the response silently if cancelled while the request was in-flight
 		if (this.cancelledSessions.has(sessionId)) {
 			this.cancelledSessions.delete(sessionId);
 			return;
@@ -244,23 +386,15 @@ export class HermesApiTransport implements IAgentTransport {
 
 		const outputText = this.extractOutputText(payload);
 		this.logger.log(
-			`[HermesApiTransport] sendPrompt response session=${sessionId} outputChars=${outputText.length}`,
+			`[HermesApiTransport] /v1/responses outputChars=${outputText.length}`,
 		);
 		if (outputText.length > 0) {
-			const chunks = this.chunkText(outputText, 140);
-			this.logger.log(
-				`[HermesApiTransport] emitting ${chunks.length} chunk(s) for session=${sessionId}`,
-			);
-			for (const chunk of chunks) {
-				this.emit({
-					type: "agent_message_chunk",
-					sessionId,
-					text: chunk,
-				});
+			for (const chunk of this.chunkText(outputText, 140)) {
+				this.emit({ type: "agent_message_chunk", sessionId, text: chunk });
 			}
 		} else {
 			this.logger.warn(
-				`[HermesApiTransport] empty output_text for session=${sessionId}; payload keys=${Object.keys(payload).join(",")}`,
+				`[HermesApiTransport] empty output_text; payload keys=${Object.keys(payload).join(",")}`,
 			);
 		}
 
@@ -268,19 +402,10 @@ export class HermesApiTransport implements IAgentTransport {
 			| { input_tokens?: number; output_tokens?: number; total_tokens?: number }
 			| undefined;
 		if (usage?.total_tokens) {
-			this.emit({
-				type: "usage_update",
-				sessionId,
-				size: usage.total_tokens,
-				used: usage.total_tokens,
-			});
+			this.emit({ type: "usage_update", sessionId, size: usage.total_tokens, used: usage.total_tokens });
 		}
 
 		state.updatedAt = new Date().toISOString();
-	}
-
-	async cancel(sessionId: string): Promise<void> {
-		this.cancelledSessions.add(sessionId);
 	}
 
 	async disconnect(): Promise<void> {

@@ -37,3 +37,10 @@
 {"ts":"2026-04-22T17:19:20Z","feature":"FR-6","event":"gate_passed","attempt":1,"summary":"All gates pass: build + gateway smoke + wsl-win smoke"}
 {"ts":"2026-04-22T17:20:00Z","feature":"FR-6","event":"feature_done","attempt":1,"summary":"FR-6 complete: gateway command discovery seam wired; command classification contract codified"}
 {"ts":"2026-04-22T17:20:10Z","feature":"FR-6","event":"commit_created","attempt":1,"summary":"commit b1b5666: feat(transport): FR-6 gateway command discovery via /v1/commands"}
+{"ts":"2026-04-22T17:00:00Z","feature":"FR-7","event":"feature_started","attempt":1,"summary":"Started FR-7 actionable error UX"}
+{"ts":"2026-04-22T17:05:00Z","feature":"FR-7","event":"implementation_pass_completed","attempt":1,"summary":"HermesError class, classifyError, useAgentMessages catch updated"}
+{"ts":"2026-04-22T17:10:00Z","feature":"FR-7","event":"unit_tests_passed","summary":"build + tsc -noEmit clean"}
+{"ts":"2026-04-22T17:10:00Z","feature":"FR-7","event":"gate_passed","summary":"gateway smoke 4/4"}
+{"ts":"2026-04-22T17:10:00Z","feature":"FR-7","event":"feature_done","summary":"FR-7 complete — actionable error messages with suggestions for all Hermes failure classes"}
+{"ts":"2026-04-22T17:10:00Z","feature":"FR-7","event":"commit_created","commit":"a8e187b","summary":"feat(transport): FR-7 actionable error UX + FR-4 cancel fix + deploy script"}
+{"ts":"2026-04-23T16:50:00Z","feature":"FR-9","event":"feature_done","attempt":1,"summary":"SSE streaming via POST /v1/responses with stream:true; consumeSseStream terminates on response.completed; response.output_text.done duplicate fixed"}
