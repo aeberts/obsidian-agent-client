@@ -1,3 +1,91 @@
+## Build & Deploy Notes
+
+**Always use `npm run deploy` — not `npm run build`.**
+
+`npm run build` compiles to `main.js` in the project root (WSL filesystem).
+Obsidian (Windows) loads from the vault plugin directory, which is a separate copy:
+`/mnt/c/Users/alexe/Dropbox/Hermes/OACTest/.obsidian/plugins/agent-client/main.js`
+
+`npm run deploy` = build + copy to vault in one step.
+
+To verify the right version is loaded, check for `[OAC] vX.Y.Z loaded` in the Obsidian
+developer console (`Ctrl+Shift+I`) immediately after reloading the plugin.
+
+Reload the plugin after each deploy: disable/re-enable in Obsidian settings, or
+`Ctrl+P` → "Reload app without saving".
+
+---
+
+## NEXT SESSION — 2026-04-22
+
+### Status
+- FR-1 through FR-6: all DONE
+- FR-7: pending (parity and safety baseline)
+
+### Key architectural discovery: command routing gap
+
+**Problem:** Discord `/status` returns structured session data; OAC `/status` returns an LLM-generated response. Root cause: Discord messages route through `handle_message()` → command registry → deterministic handler. `POST /v1/responses` bypasses the registry entirely and goes straight to the LLM.
+
+**Upstream issue:** [#4386](https://github.com/NousResearch/hermes-agent/issues/4386) — "Add http_callback deliver mode to webhook adapter for outbound push to custom chatbots" — open, no comments, no linked PR. Covers the *outbound* push gap (Hermes → OAC for background task results). Does not cover the *inbound* routing gap (routing incoming OAC messages through the command registry).
+
+**Decision:** Stay on `/v1/responses` LLM path for now (option 4). Do NOT build a webhook-based routing layer yet.
+
+### Hybrid approach to investigate next session
+
+Use the **Hermes REST API directly** for specific commands where structured data is already available, bypassing LLM entirely. Same pattern as the existing local command router but for Hermes-side state.
+
+**Available endpoints (from https://hermes-agent.nousresearch.com/docs/user-guide/features/api-server):**
+
+```
+GET  /api/jobs              — list all scheduled/background jobs  ← /queue, /background status
+GET  /api/jobs/{job_id}     — single job details
+POST /api/jobs/{job_id}/run — trigger immediate execution
+GET  /v1/runs/{run_id}/events — SSE stream of run progress/tokens  ← richer than /v1/responses
+GET  /health/detailed       — extended health metrics
+GET  /v1/models             — list available models
+GET  /v1/responses/{id}     — retrieve stored response by ID
+```
+
+**Proposed command routing table (hybrid):**
+
+| Command       | Route             | Notes                                      |
+|---------------|-------------------|--------------------------------------------|
+| `/capture`    | local router      | already works                              |
+| `/move`       | local router      | already works                              |
+| `/done`       | local router      | already works                              |
+| `/task-status`| local router      | already works                              |
+| `/process-inbox` | local router  | already works                              |
+| `/queue`      | `GET /api/jobs`   | structured list, no LLM needed             |
+| `/status`     | session state     | need to confirm if endpoint exists         |
+| `/model`      | `GET /v1/models`  | list + current, no LLM needed              |
+| everything else | `/v1/responses` | LLM path, current behavior                 |
+
+**Open question before implementing:** Does a session-status endpoint exist? Docs don't show `GET /v1/sessions/{id}` or similar. May need to check gateway source or ask the Hermes team. The `/status` command output (Session ID, Title, Created, Tokens, Connected Platforms) needs to come from somewhere.
+
+**Also from messaging docs:** The API/Webhook platform is listed as an official adapter in the 17+ platform list. The webhook adapter *inbound* path (POSTing to Hermes webhook endpoint → routes through `handle_message()`) would give deterministic command dispatch — but the response delivery still requires #4386 or a polling mechanism. Not worth building now.
+
+### FR-7 scope reminder
+- ACP baseline scenarios continue to function
+- Hermes mode shows actionable recovery guidance on failure classes (network/auth/timeout)
+- No silent failure paths for core chat workflows
+- Gate: `npm run test:gateway-smoke` + `npm run test:ui-smoke:wsl-win`
+
+### UX note
+- Shift+Enter submits instead of inserting newline in chat input — user reported, not yet investigated. Low priority.
+
+### FR-4 cancellation fix — 2026-04-22
+**Bug:** Cancel button logged "Cancelling current operation" but spinner stayed active and full response returned. Two root causes:
+1. `HermesApiTransport.cancel()` was a no-op — `requestUrl` has no AbortController support so the in-flight request couldn't be interrupted.
+2. `isSending` was only cleared by the `sendMessage` async flow completing, not by cancel.
+
+**Fix:** Added `clearSending()` to `useAgentMessages` (forces `isSending=false` immediately). Overrode `cancelOperation` in `useAgent` to call `clearSending()` right after `transport.cancel()`. Added `cancelledSessions` Set to `HermesApiTransport` — response is silently dropped when `requestUrl` eventually returns.
+
+**Also discovered:** `npm run build` compiles to WSL `main.js` but Obsidian loads from the Windows vault copy. All prior testing was on stale code. Added `npm run deploy` script. Always use `npm run deploy` going forward.
+
+**User test result:** ✓ PASSED — cancel now unlocks UI immediately and suppresses the response.
+
+---
+
 ## FR-6 — DONE — 2026-04-22
 
 **What was built:** Gateway command discovery seam. `HermesApiTransport` calls `GET /v1/commands` at session start (`newSession`/`loadSession`/`resumeSession`) and emits `available_commands_update` if the gateway returns a list. Degrades silently on 404. Command classification contract codified in `fetchAndEmitGatewayCommands` JSDoc.

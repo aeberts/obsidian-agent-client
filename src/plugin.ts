@@ -219,6 +219,7 @@ export default class AgentClientPlugin extends Plugin {
 		await this.loadSettings();
 
 		initializeLogger(this.settings);
+		console.log("[OAC] v0.6.0 loaded");
 
 		// Initialize settings store
 		this.settingsService = createSettingsService(this.settings, this);
@@ -721,6 +722,28 @@ export default class AgentClientPlugin extends Plugin {
 			callback: () => {
 				this.app.workspace.trigger(
 					"agent-client:new-chat-requested" as "quit",
+					this.lastActiveChatViewId,
+				);
+			},
+		});
+
+		this.addCommand({
+			id: "restart-agent",
+			name: "Restart agent",
+			callback: () => {
+				this.app.workspace.trigger(
+					"agent-client:restart-agent-requested" as "quit",
+					this.lastActiveChatViewId,
+				);
+			},
+		});
+
+		this.addCommand({
+			id: "send-smoke-message",
+			name: "Send smoke message",
+			callback: () => {
+				this.app.workspace.trigger(
+					"agent-client:send-smoke-message" as "quit",
 					this.lastActiveChatViewId,
 				);
 			},

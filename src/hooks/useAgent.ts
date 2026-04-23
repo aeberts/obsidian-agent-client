@@ -171,6 +171,11 @@ export function useAgent(
 	// Return
 	// ============================================================
 
+	const cancelOperation = useCallback(async () => {
+		await agentSession.cancelOperation();
+		agentMessages.clearSending();
+	}, [agentSession.cancelOperation, agentMessages.clearSending]);
+
 	return useMemo(
 		() => ({
 			// Session state
@@ -190,7 +195,7 @@ export function useAgent(
 			restartSession: agentSession.restartSession,
 			closeSession: agentSession.closeSession,
 			forceRestartAgent: agentSession.forceRestartAgent,
-			cancelOperation: agentSession.cancelOperation,
+			cancelOperation,
 			getAvailableAgents: agentSession.getAvailableAgents,
 			updateSessionFromLoad: agentSession.updateSessionFromLoad,
 
@@ -227,7 +232,7 @@ export function useAgent(
 			agentSession.restartSession,
 			agentSession.closeSession,
 			agentSession.forceRestartAgent,
-			agentSession.cancelOperation,
+			cancelOperation,
 			agentSession.getAvailableAgents,
 			agentSession.updateSessionFromLoad,
 			agentSession.setMode,

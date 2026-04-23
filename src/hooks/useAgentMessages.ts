@@ -22,6 +22,7 @@ import type { ISettingsAccess } from "../services/settings-service";
 import type { ErrorInfo } from "../types/errors";
 import type { IMentionService } from "../utils/mention-parser";
 import { preparePrompt, sendPreparedPrompt } from "../services/message-sender";
+import { HermesError } from "../transport/hermes-api-transport";
 import { Platform } from "obsidian";
 import {
 	rebuildToolCallIndex,
@@ -64,6 +65,7 @@ export interface UseAgentMessagesReturn {
 		options: SendMessageOptions,
 	) => Promise<void>;
 	clearMessages: () => void;
+	clearSending: () => void;
 	setInitialMessages: (
 		history: Array<{
 			role: string;
@@ -172,6 +174,11 @@ export function useAgentMessages(
 		},
 		[],
 	);
+
+	const clearSending = useCallback((): void => {
+		setIsSending(false);
+		setLastUserMessage(null);
+	}, []);
 
 	const setIgnoreUpdates = useCallback((ignore: boolean): void => {
 		ignoreUpdatesRef.current = ignore;
@@ -340,10 +347,18 @@ export function useAgentMessages(
 				}
 			} catch (error) {
 				setIsSending(false);
-				setErrorInfo({
-					title: "Send Message Failed",
-					message: `Failed to send message: ${error instanceof Error ? error.message : String(error)}`,
-				});
+				if (error instanceof HermesError) {
+					setErrorInfo({
+						title: "Send Failed",
+						message: error.message,
+						suggestion: error.suggestion,
+					});
+				} else {
+					setErrorInfo({
+						title: "Send Message Failed",
+						message: `Failed to send message: ${error instanceof Error ? error.message : String(error)}`,
+					});
+				}
 			}
 		},
 		[
@@ -423,6 +438,7 @@ export function useAgentMessages(
 		replaceMessage,
 		sendMessage,
 		clearMessages,
+		clearSending,
 		setInitialMessages,
 		setMessagesFromLocal,
 		clearError,

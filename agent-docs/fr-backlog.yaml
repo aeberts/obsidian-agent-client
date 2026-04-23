@@ -137,6 +137,66 @@ requirements:
   gate_commands:
   - npm run test:gateway-smoke
   - npm run test:ui-smoke:wsl-win
+- id: FR-8
+  title: Config-driven local command router
+  status: pending
+  requirement: Allow users to add or modify local deterministic commands via a configuration
+    file without rebuilding or redeploying the plugin.
+  acceptance_criteria:
+  - A config file (e.g. in plugin settings or a YAML/JSON file in the vault) defines
+    custom local commands with pattern, action type, and parameters
+  - Custom commands execute deterministically without LLM roundtrip
+  - Built-in commands (capture/move/done/task-status/process-inbox) remain as defaults
+    and can be overridden
+  - Invalid or missing config degrades gracefully to built-in defaults
+  implementation_prompt: 'Implement FR-8 with minimal invasive changes to the existing
+    local-command-router.ts.
+
+    Scope:
+
+    - Define a config schema for custom commands (pattern + action + params).
+
+    - Load config at plugin init and on settings change; merge with built-in commands.
+
+    - Keep the deterministic execution guarantee — no LLM involvement for config-defined
+    commands.
+
+    - Do not over-engineer: a flat list of commands with simple pattern matching is
+    sufficient.
+
+    '
+  gate_commands:
+  - npm run test:gateway-smoke
+  - npm run test:ui-smoke:wsl-win
+- id: FR-9
+  title: SSE streaming for Hermes transport
+  status: pending
+  requirement: Replace the blocking POST /v1/responses pattern with real SSE streaming
+    via the Runs API so tokens appear as they are generated, reducing perceived latency
+    to match the Hermes TUI experience.
+  acceptance_criteria:
+  - First token appears within ~1s of sending (not after full generation completes)
+  - Uses POST /v1/runs + GET /v1/runs/{run_id}/events SSE stream
+  - Falls back to current /v1/responses on stream failure
+  - No regression in local command router or error handling paths
+  implementation_prompt: 'Implement FR-9 by replacing the blocking requestUrl call
+    in HermesApiTransport.sendPrompt with a fetch()-based SSE client against the Runs
+    API.
+
+    Scope:
+
+    - POST /v1/runs to start a run, then GET /v1/runs/{run_id}/events as a ReadableStream.
+
+    - Emit agent_message_chunk events as token events arrive.
+
+    - Keep requestUrl fallback path if the runs endpoint is unavailable.
+
+    - Do not change the local command router or other transport methods.
+
+    '
+  gate_commands:
+  - npm run test:gateway-smoke
+  - npm run test:ui-smoke:wsl-win
 - id: FR-7
   title: Parity and safety baseline
   status: pending

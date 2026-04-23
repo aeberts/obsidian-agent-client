@@ -52,6 +52,58 @@ const HERMES_MESSAGING_COMMANDS: SlashCommand[] = [
 	{ name: "voice", description: "Control voice recording and playback", hint: "on|off|tts|status" },
 ];
 
+/**
+ * Structured transport error with an actionable recovery suggestion.
+ * Caught by useAgentMessages to populate ErrorInfo.suggestion in the UI.
+ */
+export class HermesError extends Error {
+	suggestion: string;
+	constructor(message: string, suggestion: string) {
+		super(message);
+		this.name = "HermesError";
+		this.suggestion = suggestion;
+	}
+}
+
+/** Map HTTP status / error message to a user-actionable HermesError. */
+function classifyError(status: number | undefined, message: string): HermesError {
+	if (!status) {
+		// Network-level failure — gateway not reachable
+		return new HermesError(
+			"Cannot reach the Hermes gateway.",
+			"Ensure the gateway is running: hermes gateway start",
+		);
+	}
+	if (status === 401) {
+		return new HermesError(
+			"Authentication failed (401).",
+			"Check your Hermes API key in Settings → Agent Client.",
+		);
+	}
+	if (status === 403) {
+		return new HermesError(
+			"Access denied (403).",
+			"Your API key may not have permission for this operation.",
+		);
+	}
+	if (status === 408 || message.toLowerCase().includes("timeout")) {
+		return new HermesError(
+			"Request timed out.",
+			"The gateway may be overloaded. Try again or restart: hermes gateway restart",
+		);
+	}
+	if (status >= 500) {
+		return new HermesError(
+			`Hermes gateway error (${status}).`,
+			"Check the Hermes gateway logs for details.",
+		);
+	}
+	return new HermesError(
+		message || `Hermes API error (${status})`,
+		"Check the Hermes gateway status and your plugin settings.",
+	);
+}
+
 interface HermesSessionState {
 	sessionId: string;
 	cwd: string;
@@ -70,6 +122,7 @@ export class HermesApiTransport implements IAgentTransport {
 	private defaultModel = "gpt-5.3-codex";
 	private sessionStates = new Map<string, HermesSessionState>();
 	private callbacks = new Set<(update: SessionUpdate) => void>();
+	private cancelledSessions = new Set<string>();
 
 	constructor(plugin: AgentClientPlugin) {
 		this.plugin = plugin;
@@ -146,8 +199,14 @@ export class HermesApiTransport implements IAgentTransport {
 		this.ensureInitialized();
 		const state = this.getSessionState(sessionId);
 		if (!this.apiKey) {
-			throw { code: -32000, message: "Hermes API key is not configured" };
+			throw new HermesError(
+				"Hermes API key is not configured.",
+				"Add your API key in Settings → Agent Client → Hermes API Key.",
+			);
 		}
+
+		// Clear any stale cancel flag from a previous send on this session
+		this.cancelledSessions.delete(sessionId);
 
 		const input = this.flattenPromptContent(content);
 		const model = this.getSessionModel(state) || this.defaultModel;
@@ -155,18 +214,33 @@ export class HermesApiTransport implements IAgentTransport {
 			`[HermesApiTransport] sendPrompt start session=${sessionId} model=${model} inputChars=${input.length}`,
 		);
 
-		const payload = await this.requestJson("/v1/responses", {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Authorization: `Bearer ${this.apiKey}`,
-			},
-			body: JSON.stringify({
-				model,
-				conversation: sessionId,
-				input,
-			}),
-		});
+		let payload: Record<string, unknown>;
+		try {
+			payload = await this.requestJson("/v1/responses", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${this.apiKey}`,
+				},
+				body: JSON.stringify({
+					model,
+					conversation: sessionId,
+					input,
+				}),
+			});
+		} catch (err) {
+			if (this.cancelledSessions.has(sessionId)) {
+				this.cancelledSessions.delete(sessionId);
+				return;
+			}
+			throw err;
+		}
+
+		// Drop the response silently if cancelled while the request was in-flight
+		if (this.cancelledSessions.has(sessionId)) {
+			this.cancelledSessions.delete(sessionId);
+			return;
+		}
 
 		const outputText = this.extractOutputText(payload);
 		this.logger.log(
@@ -205,8 +279,8 @@ export class HermesApiTransport implements IAgentTransport {
 		state.updatedAt = new Date().toISOString();
 	}
 
-	async cancel(_sessionId: string): Promise<void> {
-		// No server-side cancellation endpoint currently wired for /v1/responses.
+	async cancel(sessionId: string): Promise<void> {
+		this.cancelledSessions.add(sessionId);
 	}
 
 	async disconnect(): Promise<void> {
@@ -516,10 +590,17 @@ export class HermesApiTransport implements IAgentTransport {
 			const message =
 				((errorPayload.error as Record<string, unknown> | undefined)?.message as string | undefined) ||
 				(status ? `Hermes API error (${status})` : (error as Error).message || "Hermes API request failed");
-			this.logger.error(
-				`[HermesApiTransport] request failed path=${path} status=${status ?? "n/a"} message=${message}`,
-			);
-			throw new Error(message);
+			// 404 on optional endpoints (e.g. /v1/commands) is expected — log at debug level
+			if (status === 404) {
+				this.logger.log(
+					`[HermesApiTransport] 404 path=${path} (endpoint not implemented yet)`,
+				);
+			} else {
+				this.logger.error(
+					`[HermesApiTransport] request failed path=${path} status=${status ?? "n/a"} message=${message}`,
+				);
+			}
+			throw classifyError(status, message);
 		}
 
 		const payload =
@@ -531,7 +612,7 @@ export class HermesApiTransport implements IAgentTransport {
 			const message =
 				((payload.error as Record<string, unknown> | undefined)?.message as string | undefined) ||
 				`Hermes API error (${response.status})`;
-			throw new Error(message);
+			throw classifyError(response.status, message);
 		}
 
 		return payload;
