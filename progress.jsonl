@@ -44,3 +44,4 @@
 {"ts":"2026-04-22T17:10:00Z","feature":"FR-7","event":"feature_done","summary":"FR-7 complete — actionable error messages with suggestions for all Hermes failure classes"}
 {"ts":"2026-04-22T17:10:00Z","feature":"FR-7","event":"commit_created","commit":"a8e187b","summary":"feat(transport): FR-7 actionable error UX + FR-4 cancel fix + deploy script"}
 {"ts":"2026-04-23T16:50:00Z","feature":"FR-9","event":"feature_done","attempt":1,"summary":"SSE streaming via POST /v1/responses with stream:true; consumeSseStream terminates on response.completed; response.output_text.done duplicate fixed"}
+{"ts":"2026-04-23T17:00:00Z","feature":"FR-10","event":"feature_done","attempt":1,"summary":"TTFT instrumentation added; diagnosis: first-token=8731ms is LLM prefill latency inside Hermes, not addressable from OAC; warm session reverted as ineffective"}

@@ -16,6 +16,25 @@ Reload the plugin after each deploy: disable/re-enable in Obsidian settings, or
 
 ---
 
+## FR-10 — DONE — 2026-04-23
+
+**What was built:** TTFT timing instrumentation in `trySendViaResponsesStream`. Logs `connection`, `first-token`, `stream`, and `total` milliseconds after every send.
+
+**Diagnosis result:** `connection=5ms  first-token=8731ms  stream=968ms  total=9704ms`
+- HTTP connection to local gateway: instant (5ms) — not a bottleneck
+- First-token latency: **8.7 seconds** — entirely server-side LLM prefill time
+- Streaming throughput once started: fast (968ms)
+
+**Root cause:** LLM prefill latency inside Hermes/model runtime. Not addressable from the OAC plugin. Session pre-warming was implemented and then reverted — it cannot help because the bottleneck is model compute, not session object creation or TCP overhead.
+
+**Actionable follow-up (Hermes-side):** Reduce system prompt length, ensure model stays loaded in VRAM between requests, or investigate GPU utilization. OAC-side improvement: a visible "thinking…" placeholder could improve perceived responsiveness while waiting for the first token.
+
+**Tests:** unit ✓ (build + tsc -noEmit) | gateway smoke ✓ (4/4)
+
+**Gate:** build ✓, gateway smoke ✓
+
+---
+
 ## FR-9 — DONE — 2026-04-23
 
 **What was built:** SSE streaming via `POST /v1/responses` with `stream: true`. Tokens arrive progressively via `fetch()` ReadableStream. `consumeSseStream` parses SSE events and emits `agent_message_chunk` per `response.output_text.delta`. Terminates on `response.completed` (also emits `usage_update`). Fallback to blocking `requestUrl` path if streaming unavailable.

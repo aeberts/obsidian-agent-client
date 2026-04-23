@@ -245,6 +245,7 @@ export class HermesApiTransport implements IAgentTransport {
 	): Promise<boolean> {
 		const abortCtrl = new AbortController();
 		this.sessionAbortControllers.set(sessionId, abortCtrl);
+		const t0 = performance.now();
 		try {
 			const response = await fetch(`${this.apiBase}/v1/responses`, {
 				method: "POST",
@@ -255,9 +256,21 @@ export class HermesApiTransport implements IAgentTransport {
 				body: JSON.stringify({ model, conversation: sessionId, input, stream: true }),
 				signal: abortCtrl.signal,
 			});
+			const t1 = performance.now();
 			if (!response.ok || !response.body) return false;
 
-			await this.consumeSseStream(response.body, sessionId);
+			let t2 = -1;
+			await this.consumeSseStream(response.body, sessionId, () => {
+				if (t2 < 0) t2 = performance.now();
+			});
+			const t3 = performance.now();
+
+			this.logger.log(
+				`[HermesApiTransport] TTFT: connection=${Math.round(t1 - t0)}ms` +
+				` first-token=${t2 > 0 ? Math.round(t2 - t1) : "n/a"}ms` +
+				` stream=${t2 > 0 ? Math.round(t3 - t2) : Math.round(t3 - t1)}ms` +
+				` total=${Math.round(t3 - t0)}ms`,
+			);
 			return true;
 		} catch (err) {
 			if ((err as Error).name === "AbortError") return true; // cancelled — handled
@@ -272,6 +285,7 @@ export class HermesApiTransport implements IAgentTransport {
 	private async consumeSseStream(
 		body: ReadableStream<Uint8Array>,
 		sessionId: string,
+		onFirstChunk?: () => void,
 	): Promise<void> {
 		const reader = body.getReader();
 		const decoder = new TextDecoder();
@@ -300,6 +314,7 @@ export class HermesApiTransport implements IAgentTransport {
 
 					const text = this.extractSseText(event);
 					if (text) {
+						onFirstChunk?.();
 						this.emit({ type: "agent_message_chunk", sessionId, text });
 					}
 
