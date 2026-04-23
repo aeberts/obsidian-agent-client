@@ -219,7 +219,7 @@ export default class AgentClientPlugin extends Plugin {
 		await this.loadSettings();
 
 		initializeLogger(this.settings);
-		console.log("[OAC] v0.6.0 loaded");
+		console.log("[OAC] v0.6.1 loaded");
 
 		// Initialize settings store
 		this.settingsService = createSettingsService(this.settings, this);

@@ -86,6 +86,30 @@ GET  /v1/responses/{id}     — retrieve stored response by ID
 
 ---
 
+## FR-7 — DONE — 2026-04-22
+
+**What was built:** Actionable error UX for Hermes transport failures. `HermesError` class classifies network/auth/timeout/server errors at throw time. `useAgentMessages` detects `HermesError` and surfaces `suggestion` in the `ErrorBanner`. No-API-key path fixed from plain object throw to structured error. All error paths now reach the UI.
+
+**Error classification:**
+- No network connection → "Ensure the gateway is running: `hermes gateway start`"
+- 401 → "Check your Hermes API key in Settings → Agent Client"
+- 403 → "Your API key may not have permission for this operation"
+- 408/timeout → "Try again or restart: `hermes gateway restart`"
+- 500+ → "Check the Hermes gateway logs for details"
+
+**Tests:** unit ✓ (build + tsc -noEmit) | e2e ✓ (gateway smoke 4/4) | user test ✓ (2026-04-23)
+
+**Gate:** build ✓, gateway smoke ✓, WSL-Win smoke ✓, user test ✓
+
+**Commit:** a8e187b (+ liveApiKey fix in follow-up, deployed as v0.6.1)
+
+**Notes:**
+- WSL-Win UI smoke 6/6 passed.
+- Post-commit bug fix: `this.apiKey` was cached at init time — removing the key from settings mid-session had no effect. Fixed with `liveApiKey` getter that reads `plugin.settings.hermesApi.apiKey` at send time. Deployed as v0.6.1.
+- `HermesError` is exported from `hermes-api-transport.ts` — importable by other hooks if needed.
+
+---
+
 ## FR-6 — DONE — 2026-04-22
 
 **What was built:** Gateway command discovery seam. `HermesApiTransport` calls `GET /v1/commands` at session start (`newSession`/`loadSession`/`resumeSession`) and emits `available_commands_update` if the gateway returns a list. Degrades silently on 404. Command classification contract codified in `fetchAndEmitGatewayCommands` JSDoc.

@@ -198,7 +198,7 @@ export class HermesApiTransport implements IAgentTransport {
 	async sendPrompt(sessionId: string, content: PromptContent[]): Promise<void> {
 		this.ensureInitialized();
 		const state = this.getSessionState(sessionId);
-		if (!this.apiKey) {
+		if (!this.liveApiKey) {
 			throw new HermesError(
 				"Hermes API key is not configured.",
 				"Add your API key in Settings → Agent Client → Hermes API Key.",
@@ -220,7 +220,7 @@ export class HermesApiTransport implements IAgentTransport {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					Authorization: `Bearer ${this.apiKey}`,
+					Authorization: `Bearer ${this.liveApiKey}`,
 				},
 				body: JSON.stringify({
 					model,
@@ -521,7 +521,7 @@ export class HermesApiTransport implements IAgentTransport {
 		try {
 			const payload = await this.requestJson("/v1/commands", {
 				method: "GET",
-				headers: { Authorization: `Bearer ${this.apiKey}` },
+				headers: { Authorization: `Bearer ${this.liveApiKey}` },
 			});
 			const raw = payload.commands;
 			if (!Array.isArray(raw)) {
@@ -622,5 +622,10 @@ export class HermesApiTransport implements IAgentTransport {
 		if (!this.initialized) {
 			throw new Error("HermesApiTransport is not initialized");
 		}
+	}
+
+	/** Always reads the current API key from live plugin settings. */
+	private get liveApiKey(): string {
+		return this.plugin.settings.hermesApi?.apiKey || this.apiKey;
 	}
 }
