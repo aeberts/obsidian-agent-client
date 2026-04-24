@@ -916,11 +916,8 @@ export default class AgentClientPlugin extends Plugin {
 		this.customCommandDefs = await this.loadCustomCommands();
 
 		for (const def of this.customCommandDefs) {
-			if (
-				def.action === "move-line" ||
-				def.action === "frontmatter" ||
-				def.action === "append"
-			) {
+			if (def.action === "move-line" || def.action === "append") {
+				// Requires active editor — only shown when a markdown editor is open
 				this.addCommand({
 					id: `custom-${def.id}`,
 					name: def.name,
@@ -941,14 +938,19 @@ export default class AgentClientPlugin extends Plugin {
 					},
 				});
 			} else {
+				// frontmatter and response: always visible; use getActiveFile() for file context
 				this.addCommand({
 					id: `custom-${def.id}`,
 					name: def.name,
 					callback: () => {
 						void (async () => {
+							const file =
+								this.app.workspace.getActiveFile() ?? undefined;
 							const result = await executeCustomCommand(
 								def,
 								this.app,
+								undefined,
+								file,
 							);
 							this.app.workspace.trigger(
 								"agent-client:inject-message" as "quit",
