@@ -22,6 +22,10 @@ import { AcpClient } from "./acp/acp-client";
 import { HermesApiTransport } from "./transport/hermes-api-transport";
 import type { IAgentTransport, TransportMode } from "./types/transport";
 import {
+	executeCustomCommand,
+	type CustomCommandDef,
+} from "./transport/local-command-router";
+import {
 	sanitizeArgs,
 	normalizeEnvVars,
 	normalizeCustomAgent,
@@ -210,6 +214,8 @@ export default class AgentClientPlugin extends Plugin {
 
 	/** Map of viewId to transport client for multi-session support */
 	private _acpClients: Map<string, IAgentTransport> = new Map();
+	/** Custom commands loaded from commands.json (FR-8) */
+	private customCommandDefs: CustomCommandDef[] = [];
 	/** Floating button container (independent from chat view instances) */
 	private floatingButton: FloatingButtonContainer | null = null;
 	/** Counter for generating unique floating chat instance IDs */
@@ -219,7 +225,7 @@ export default class AgentClientPlugin extends Plugin {
 		await this.loadSettings();
 
 		initializeLogger(this.settings);
-		console.log("[OAC] v0.6.1 loaded");
+		console.log("[OAC] v0.6.2 loaded");
 
 		// Initialize settings store
 		this.settingsService = createSettingsService(this.settings, this);
@@ -273,6 +279,7 @@ export default class AgentClientPlugin extends Plugin {
 		this.registerAgentCommands();
 		this.registerPermissionCommands();
 		this.registerBroadcastCommands();
+		void this.registerCustomCommands();
 
 		// Floating chat window commands
 		this.addCommand({
@@ -868,6 +875,126 @@ export default class AgentClientPlugin extends Plugin {
 
 		await Promise.allSettled(allViews.map((v) => v.cancelOperation()));
 		new Notice("[Agent Client] Cancel broadcast to all views");
+	}
+
+	// ============================================================
+	// Custom Commands (FR-8)
+	// ============================================================
+
+	private async loadCustomCommands(): Promise<CustomCommandDef[]> {
+		const path = `${this.manifest.dir}/commands.json`;
+		try {
+			const raw = await this.app.vault.adapter.read(path);
+			const parsed = JSON.parse(raw) as unknown;
+			if (!Array.isArray(parsed)) return [];
+			const valid = ["append", "move-line", "frontmatter", "response"];
+			const defs: CustomCommandDef[] = [];
+			for (const entry of parsed) {
+				if (typeof entry !== "object" || entry === null) continue;
+				const e = entry as Record<string, unknown>;
+				if (
+					typeof e.id !== "string" ||
+					typeof e.name !== "string" ||
+					typeof e.action !== "string"
+				)
+					continue;
+				if (!valid.includes(e.action)) {
+					console.warn(
+						`[OAC] commands.json: unknown action "${e.action}" for "${e.id}" — skipping`,
+					);
+					continue;
+				}
+				defs.push(e as unknown as CustomCommandDef);
+			}
+			return defs;
+		} catch {
+			return [];
+		}
+	}
+
+	async registerCustomCommands(): Promise<void> {
+		this.customCommandDefs = await this.loadCustomCommands();
+
+		for (const def of this.customCommandDefs) {
+			if (
+				def.action === "move-line" ||
+				def.action === "frontmatter" ||
+				def.action === "append"
+			) {
+				this.addCommand({
+					id: `custom-${def.id}`,
+					name: def.name,
+					editorCallback: (editor, ctx) => {
+						void (async () => {
+							const result = await executeCustomCommand(
+								def,
+								this.app,
+								editor,
+								ctx.file ?? undefined,
+							);
+							this.app.workspace.trigger(
+								"agent-client:inject-message" as "quit",
+								this.lastActiveChatViewId,
+								result,
+							);
+						})();
+					},
+				});
+			} else {
+				this.addCommand({
+					id: `custom-${def.id}`,
+					name: def.name,
+					callback: () => {
+						void (async () => {
+							const result = await executeCustomCommand(
+								def,
+								this.app,
+							);
+							this.app.workspace.trigger(
+								"agent-client:inject-message" as "quit",
+								this.lastActiveChatViewId,
+								result,
+							);
+						})();
+					},
+				});
+			}
+		}
+
+		// Built-in: list all custom commands in the active chat panel
+		this.addCommand({
+			id: "list-local-commands",
+			name: "List local commands",
+			callback: () => {
+				const defs = this.customCommandDefs;
+				let md: string;
+				if (defs.length === 0) {
+					md =
+						"**Local commands:** none configured. Add entries to `.obsidian/plugins/agent-client/commands.json`.";
+				} else {
+					const rows = defs
+						.map((d) => {
+							const p = d.params as unknown as Record<string, unknown>;
+							const detail =
+								d.action === "move-line"
+									? `→ ${String(p.targetFile ?? "")}`
+									: d.action === "frontmatter"
+										? `${String(p.field ?? "")} = ${String(p.value ?? "")}`
+										: d.action === "append"
+											? `→ ${String(p.file ?? "")}`
+											: String(p.template ?? "").slice(0, 40);
+							return `| ${d.name} | ${d.action} | ${detail} |`;
+						})
+						.join("\n");
+					md = `**Local commands**\n\n| Command | Action | Details |\n|---|---|---|\n${rows}`;
+				}
+				this.app.workspace.trigger(
+					"agent-client:inject-message" as "quit",
+					this.lastActiveChatViewId,
+					md,
+				);
+			},
+		});
 	}
 
 	async loadSettings() {

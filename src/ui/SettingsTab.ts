@@ -164,6 +164,8 @@ export class AgentClientSettingTab extends PluginSettingTab {
 					}),
 			);
 
+		this.renderCustomCommandsEditor(containerEl);
+
 		// ─────────────────────────────────────────────────────────────────────
 		// Mentions
 		// ─────────────────────────────────────────────────────────────────────
@@ -1228,6 +1230,93 @@ export class AgentClientSettingTab extends PluginSettingTab {
 					});
 				text.inputEl.rows = 3;
 			});
+	}
+
+	private renderCustomCommandsEditor(containerEl: HTMLElement): void {
+		new Setting(containerEl)
+			.setName("Local commands")
+			.setHeading();
+
+		const descFrag = document.createDocumentFragment();
+		descFrag.append(
+			"JSON array of commands registered in the Obsidian command palette. " +
+			"Each entry needs ",
+		);
+		descFrag.appendChild(document.createElement("code")).textContent =
+			'id, name, action, params';
+		descFrag.append(
+			". Reload the plugin after saving to register changes. " +
+			'Run "Agent Client: List local commands" in the palette to verify.',
+		);
+		new Setting(containerEl).setDesc(descFrag);
+
+		const errorEl = containerEl.createEl("p", {
+			cls: "agent-client-commands-error",
+		});
+		errorEl.style.color = "var(--text-error)";
+		errorEl.style.fontSize = "var(--font-ui-smaller)";
+		errorEl.style.marginTop = "0";
+		errorEl.style.display = "none";
+
+		let textAreaEl: HTMLTextAreaElement | null = null;
+
+		new Setting(containerEl).addTextArea((text) => {
+			textAreaEl = text.inputEl;
+			text.inputEl.rows = 10;
+			text.inputEl.style.fontFamily = "monospace";
+			text.inputEl.style.fontSize = "12px";
+			text.inputEl.style.width = "100%";
+			text.setPlaceholder(
+				JSON.stringify(
+					[
+						{
+							id: "move-line-to-inbox",
+							name: "Move line to inbox",
+							action: "move-line",
+							params: {
+								targetFile: "Inbox.md",
+								targetSection: "## Inbox",
+							},
+						},
+					],
+					null,
+					2,
+				),
+			);
+
+			// Load current commands.json content
+			const commandsPath = `${this.plugin.manifest.dir}/commands.json`;
+			void this.plugin.app.vault.adapter
+				.read(commandsPath)
+				.then((content) => {
+					if (textAreaEl) text.setValue(content);
+				})
+				.catch(() => {});
+
+			text.onChange(async (value) => {
+				if (value.trim() === "") {
+					errorEl.style.display = "none";
+					try {
+						await this.plugin.app.vault.adapter.write(
+							commandsPath,
+							"[]",
+						);
+					} catch { /* ignore */ }
+					return;
+				}
+				try {
+					JSON.parse(value);
+					await this.plugin.app.vault.adapter.write(
+						commandsPath,
+						value,
+					);
+					errorEl.style.display = "none";
+				} catch {
+					errorEl.textContent = "Invalid JSON — not saved";
+					errorEl.style.display = "block";
+				}
+			});
+		});
 	}
 
 	private generateCustomAgentDisplayName(): string {

@@ -16,7 +16,7 @@
  * Everything else → { kind: "escalate" }
  */
 
-import { TFile, type Vault } from "obsidian";
+import { App, TFile, type Editor, type Vault } from "obsidian";
 
 // ============================================================================
 // Command Types
@@ -54,6 +54,41 @@ export type ParsedCommand =
 export type RouteDecision =
 	| { kind: "local"; command: ParsedCommand }
 	| { kind: "escalate" };
+
+// ============================================================================
+// Custom Command Types (FR-8)
+// ============================================================================
+
+export interface AppendParams {
+	file: string;
+	template: string;
+	section?: string;
+	createIfMissing?: boolean;
+}
+
+export interface MoveLineParams {
+	targetFile: string;
+	targetSection?: string;
+	createIfMissing?: boolean;
+}
+
+export interface FrontmatterParams {
+	field: string;
+	value: string;
+	target: "active" | "auto-mention";
+}
+
+export interface ResponseParams {
+	template: string;
+}
+
+export interface CustomCommandDef {
+	id: string;
+	name: string;
+	description?: string;
+	action: "append" | "move-line" | "frontmatter" | "response";
+	params: AppendParams | MoveLineParams | FrontmatterParams | ResponseParams;
+}
 
 // ============================================================================
 // Patterns
@@ -317,4 +352,111 @@ async function executeBatchInbox(
 
 	const n = toProcess.length;
 	return `Processed ${n} task${n === 1 ? "" : "s"} — moved to ${archivePath}.`;
+}
+
+// ============================================================================
+// Custom Command Executor (FR-8)
+// ============================================================================
+
+/**
+ * Execute a custom command defined in commands.json.
+ * Returns a human-readable result string injected into the OAC chat panel.
+ */
+export async function executeCustomCommand(
+	def: CustomCommandDef,
+	app: App,
+	editor?: Editor,
+	file?: TFile,
+): Promise<string> {
+	switch (def.action) {
+		case "response": {
+			const p = def.params as ResponseParams;
+			return applyTokens(p.template, editor, file);
+		}
+		case "append": {
+			const p = def.params as AppendParams;
+			if (!p.file) return "Command misconfigured: missing file param";
+			const text = applyTokens(p.template, editor, file);
+			await appendToSection(
+				app.vault,
+				p.file,
+				text,
+				p.section,
+				p.createIfMissing ?? true,
+			);
+			return `Appended to ${p.file}: ${text}`;
+		}
+		case "move-line": {
+			const p = def.params as MoveLineParams;
+			if (!editor) return "No active editor for move-line command";
+			const cursor = editor.getCursor();
+			const line = editor.getLine(cursor.line);
+			if (!line.trim()) return "Current line is empty — nothing to move";
+			// Delete the line (including its trailing newline where possible)
+			const lineCount = editor.lineCount();
+			const from = { line: cursor.line, ch: 0 };
+			const to =
+				cursor.line < lineCount - 1
+					? { line: cursor.line + 1, ch: 0 }
+					: { line: cursor.line, ch: line.length };
+			editor.replaceRange("", from, to);
+			await appendToSection(
+				app.vault,
+				p.targetFile,
+				line.trim(),
+				p.targetSection,
+				p.createIfMissing ?? true,
+			);
+			return `Moved to ${p.targetFile}`;
+		}
+		case "frontmatter": {
+			const p = def.params as FrontmatterParams;
+			// Both "active" and "auto-mention" use the active editor file;
+			// auto-mention fallback to active file per spec.
+			if (!file) return "No active file for frontmatter command";
+			await app.fileManager.processFrontMatter(file, (fm) => {
+				fm[p.field] = p.value;
+			});
+			return `Set ${p.field} = ${p.value} on ${file.basename}`;
+		}
+	}
+}
+
+function applyTokens(template: string, editor?: Editor, file?: TFile): string {
+	let result = template;
+	const cursorLine = editor
+		? editor.getLine(editor.getCursor().line)
+		: "";
+	result = result.replace(/\{cursor-line\}/g, cursorLine);
+	result = result.replace(/\{active-file\}/g, file?.basename ?? "");
+	result = result.replace(/\{active-file-path\}/g, file?.path ?? "");
+	return result;
+}
+
+async function appendToSection(
+	vault: Vault,
+	filePath: string,
+	text: string,
+	section?: string,
+	createIfMissing = true,
+): Promise<void> {
+	const existing = vault.getAbstractFileByPath(filePath);
+	if (existing instanceof TFile) {
+		if (section) {
+			const content = await vault.read(existing);
+			const lines = content.split("\n");
+			const sectionIdx = lines.findIndex(
+				(l) => l.trim() === section.trim(),
+			);
+			if (sectionIdx >= 0) {
+				lines.splice(sectionIdx + 1, 0, text);
+				await vault.modify(existing, lines.join("\n"));
+				return;
+			}
+		}
+		await vault.append(existing, `\n${text}`);
+	} else if (createIfMissing) {
+		const content = section ? `${section}\n${text}\n` : `${text}\n`;
+		await vault.create(filePath, content);
+	}
 }

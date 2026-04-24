@@ -815,6 +815,7 @@ export function ChatPanel({
 	const handleStopGenerationRef = useRef(handleStopGeneration);
 	const handleExportChatRef = useRef(handleExportChat);
 	const handleRestartAgentRef = useRef(handleRestartAgent);
+	const addMessageRef = useRef(agent.addMessage);
 	handleNewChatWithPersistRef.current = handleNewChatWithPersist;
 	handleNewChatRef.current = handleNewChat;
 	approveActivePermissionRef.current = agent.approveActivePermission;
@@ -822,6 +823,7 @@ export function ChatPanel({
 	handleStopGenerationRef.current = handleStopGeneration;
 	handleExportChatRef.current = handleExportChat;
 	handleRestartAgentRef.current = handleRestartAgent;
+	addMessageRef.current = agent.addMessage;
 
 	useEffect(() => {
 		const workspace = plugin.app.workspace;
@@ -914,6 +916,21 @@ export function ChatPanel({
 					if (targetViewId && targetViewId !== viewId) return;
 					const smokeMessage = `T47_SMOKE_${Date.now()}`;
 					void handleSendMessageRef.current(smokeMessage);
+				},
+			),
+
+			// Inject markdown into chat without LLM call (custom commands, FR-8)
+			ws.on(
+				"agent-client:inject-message",
+				(targetViewId?: string, markdown?: string) => {
+					if (targetViewId && targetViewId !== viewId) return;
+					if (!markdown) return;
+					addMessageRef.current({
+						id: crypto.randomUUID(),
+						role: "assistant",
+						content: [{ type: "text", text: markdown }],
+						timestamp: new Date(),
+					});
 				},
 			),
 		];
