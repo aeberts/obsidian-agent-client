@@ -1,3 +1,21 @@
+## FR-8 — DONE — 2026-04-24
+
+**What was built:** Config-driven Obsidian command palette entries loaded from `.obsidian/plugins/agent-client/commands.json`. Four action types: `move-line` (cursor-aware), `frontmatter` (processFrontMatter), `append` (vault file append), `response` (static text). Results injected into active OAC chat panel via `agent-client:inject-message` workspace event — no LLM call. Built-in `List local commands` command validates loaded config. Settings tab textarea edits `commands.json` with inline JSON validation.
+
+**Tests:** unit ✓ (build + tsc -noEmit) | gateway smoke ✓ (4/4) | wsl-win smoke environment-blocked (pre-existing PowerShell exec constraint)
+
+**Gate:** build ✓, gateway smoke ✓
+
+**Commit:** 4241863
+
+**Notes:**
+- `commands.json` lives at `.obsidian/plugins/agent-client/commands.json` (plugin data dir, not vault root)
+- Reload plugin after editing `commands.json` to register new commands — no live file-watching
+- `frontmatter` `target: "auto-mention"` falls back to active file (auto-mention context not available in palette callback)
+- The `agent-client:inject-message` workspace event is the general mechanism for any future code that wants to post markdown into the chat without an LLM call
+
+---
+
 ## Build & Deploy Notes
 
 **Always use `npm run deploy` — not `npm run build`.**
