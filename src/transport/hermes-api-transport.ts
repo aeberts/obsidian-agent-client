@@ -325,6 +325,10 @@ export class HermesApiTransport implements IAgentTransport {
 		const reader = body.getReader();
 		const decoder = new TextDecoder();
 		let buffer = "";
+		// Tracks the SSE `event:` field for the current event block; Hermes custom
+		// events (e.g. hermes.tool.progress) set their type here rather than inside
+		// the JSON payload.
+		let sseEventType: string | undefined;
 
 		try {
 			while (true) {
@@ -336,6 +340,15 @@ export class HermesApiTransport implements IAgentTransport {
 				buffer = lines.pop() ?? "";
 
 				for (const line of lines) {
+					if (line.startsWith("event: ")) {
+						sseEventType = line.slice(7).trim();
+						continue;
+					}
+					// Blank line marks end of an SSE event block
+					if (line === "") {
+						sseEventType = undefined;
+						continue;
+					}
 					if (!line.startsWith("data: ")) continue;
 					const data = line.slice(6).trim();
 					if (data === "[DONE]") return;
@@ -344,10 +357,26 @@ export class HermesApiTransport implements IAgentTransport {
 					try {
 						event = JSON.parse(data) as Record<string, unknown>;
 					} catch {
+						sseEventType = undefined;
 						continue;
 					}
 
-					const type = event.type as string | undefined;
+					// Resolve event type from JSON body first, then SSE event field.
+					const type = (event.type as string | undefined) ?? sseEventType;
+					sseEventType = undefined;
+
+					// hermes.tool.progress — real-time tool execution progress (v0.7.0+).
+					// Payload uses SSE `event:` field (no `type` in JSON); fields: tool, emoji, label.
+					if (type === "hermes.tool.progress") {
+						const emoji = typeof event.emoji === "string" ? event.emoji : "⚙️";
+						const label = typeof event.label === "string" ? event.label
+							: typeof event.tool === "string" ? event.tool : "";
+						if (label) {
+							onFirstChunk?.();
+							this.emit({ type: "agent_message_chunk", sessionId, text: `_${emoji} ${label}_\n` });
+						}
+						continue;
+					}
 
 					// Emit a visible status line for each tool call so the user sees
 					// activity during the (potentially long) tool-execution phase.
@@ -414,8 +443,9 @@ export class HermesApiTransport implements IAgentTransport {
 		const delta = event.delta as Record<string, unknown> | undefined;
 		if (typeof delta?.text === "string") return delta.text;
 
-		// Log unrecognised non-response events so we can identify new formats
-		if (type) {
+		// Log unrecognised non-response events so we can identify new formats.
+		// hermes.tool.progress is handled upstream before extractSseText is called.
+		if (type && type !== "hermes.tool.progress") {
 			this.logger.log(`[HermesApiTransport] unhandled SSE event type="${type}"`);
 		}
 		return null;
