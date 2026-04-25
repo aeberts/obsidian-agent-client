@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useRef } from "react";
 import type { NoteMetadata, IVaultAccess } from "../services/vault-service";
 import {
 	detectMention,
@@ -39,6 +39,8 @@ export interface MentionsState {
 	toggleAutoMention: (disabled?: boolean) => void;
 	/** Update the active note from the vault */
 	updateActiveNote: () => Promise<void>;
+	/** Read the current active note synchronously (ref-backed, no stale closure) */
+	getActiveNoteSnapshot: () => NoteMetadata | null;
 }
 
 export interface CommandsState {
@@ -103,6 +105,7 @@ export function useSuggestions(
 		null,
 	);
 	const [activeNote, setActiveNote] = useState<NoteMetadata | null>(null);
+	const activeNoteRef = useRef<NoteMetadata | null>(null);
 	const [isAutoMentionDisabled, setIsAutoMentionDisabled] = useState(false);
 
 	const mentionIsOpen =
@@ -199,8 +202,14 @@ export function useSuggestions(
 
 	const updateActiveNote = useCallback(async () => {
 		const note = await vaultAccess.getActiveNote();
+		activeNoteRef.current = note;
 		setActiveNote(note);
 	}, [vaultAccess]);
+
+	const getActiveNoteSnapshot = useCallback(
+		(): NoteMetadata | null => activeNoteRef.current,
+		[],
+	);
 
 	// ============================================================
 	// Command Callbacks
@@ -300,6 +309,7 @@ export function useSuggestions(
 			isAutoMentionDisabled,
 			toggleAutoMention,
 			updateActiveNote,
+			getActiveNoteSnapshot,
 		}),
 		[
 			mentionSuggestions,
@@ -314,6 +324,7 @@ export function useSuggestions(
 			isAutoMentionDisabled,
 			toggleAutoMention,
 			updateActiveNote,
+			getActiveNoteSnapshot,
 		],
 	);
 

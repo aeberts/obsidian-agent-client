@@ -86,6 +86,8 @@ export interface AgentClientPluginSettings {
 		endpoint: string;
 		apiKey: string;
 		defaultModel: string;
+		/** Absolute paths to SKILL.md files (or skill dirs) to prepend on new sessions, one per line */
+		autoLoadSkills: string;
 	};
 	autoAllowPermissions: boolean;
 	autoMentionActiveNote: boolean;
@@ -166,6 +168,7 @@ const DEFAULT_SETTINGS: AgentClientPluginSettings = {
 		endpoint: "http://127.0.0.1:8642",
 		apiKey: "",
 		defaultModel: "gpt-5.3-codex",
+		autoLoadSkills: "",
 	},
 	autoAllowPermissions: false,
 	autoMentionActiveNote: true,
@@ -1077,6 +1080,7 @@ export default class AgentClientPlugin extends Plugin {
 				endpoint: str(rh.endpoint, D.hermesApi.endpoint),
 				apiKey: str(rh.apiKey, D.hermesApi.apiKey),
 				defaultModel: str(rh.defaultModel, D.hermesApi.defaultModel),
+				autoLoadSkills: str(rh.autoLoadSkills, D.hermesApi.autoLoadSkills),
 			},
 			autoAllowPermissions: bool(
 				raw.autoAllowPermissions,
