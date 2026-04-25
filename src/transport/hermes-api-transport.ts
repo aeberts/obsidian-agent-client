@@ -280,8 +280,9 @@ export class HermesApiTransport implements IAgentTransport {
 		const state = this.getSessionState(sessionId);
 		const t0 = performance.now();
 		try {
-			const body: Record<string, unknown> = { model, conversation: sessionId, input, stream: true };
-			if (state.lastResponseId) body.previous_response_id = state.lastResponseId;
+			const body: Record<string, unknown> = state.lastResponseId
+				? { model, previous_response_id: state.lastResponseId, input, stream: true }
+				: { model, conversation: sessionId, input, stream: true };
 			const response = await fetch(`${this.apiBase}/v1/responses`, {
 				method: "POST",
 				headers: {
@@ -460,8 +461,9 @@ export class HermesApiTransport implements IAgentTransport {
 	): Promise<void> {
 		let payload: Record<string, unknown>;
 		try {
-			const reqBody: Record<string, unknown> = { model, conversation: sessionId, input };
-			if (state.lastResponseId) reqBody.previous_response_id = state.lastResponseId;
+			const reqBody: Record<string, unknown> = state.lastResponseId
+				? { model, previous_response_id: state.lastResponseId, input }
+				: { model, conversation: sessionId, input };
 			payload = await this.requestJson("/v1/responses", {
 				method: "POST",
 				headers: {
