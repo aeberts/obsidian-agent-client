@@ -6,7 +6,7 @@
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-		"deploy": "npm run build && cp main.js \"/mnt/c/Users/alexe/Dropbox/Hermes/OACTest/.obsidian/plugins/agent-client/main.js\"",
+		"deploy": "npm run build && cp main.js \"/mnt/c/Users/alexe/Dropbox/Hermes/OACTest/.obsidian/plugins/agent-client/main.js\" && cp main.js styles.css manifest.json \"/home/zand/vault/.obsidian/plugins/agent-client/\"",
 		"version": "node version-bump.mjs && git add manifest.json versions.json",
 		"format": "prettier --write \"src/**/*.{ts,tsx}\" \"*.css\"",
 		"format:check": "prettier --check \"src/**/*.{ts,tsx}\" \"*.css\"",

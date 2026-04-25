@@ -104,12 +104,37 @@ function classifyError(status: number | undefined, message: string): HermesError
 	);
 }
 
+function toolEmoji(name: string): string {
+	if (name.startsWith("read_")) return "📖";
+	if (name.startsWith("search_") || name === "viking_search") return "🔍";
+	if (name.startsWith("write_") || name.startsWith("create_")) return "✏️";
+	if (name === "delegate_task") return "⚙️";
+	if (name === "skill_view") return "📋";
+	return "🔧";
+}
+
+function toolDetail(name: string, argsJson: string): string {
+	let args: Record<string, unknown>;
+	try { args = JSON.parse(argsJson) as Record<string, unknown>; } catch { return ""; }
+	const str = (v: unknown, max = 60): string => {
+		const s = String(v ?? "");
+		return s.length > max ? s.slice(0, max - 1) + "…" : s;
+	};
+	if (name === "delegate_task" && args.goal) return str(args.goal, 50);
+	if (args.path) return str(args.path);
+	if (args.query) return str(args.query);
+	if (args.pattern) return str(args.pattern);
+	return "";
+}
+
 interface HermesSessionState {
 	sessionId: string;
 	cwd: string;
 	updatedAt: string;
 	title?: string;
 	configOptions?: SessionConfigOption[];
+	/** Skill context to prepend on the first sendPrompt of this session, then cleared. */
+	pendingSkillContext?: string;
 }
 
 export class HermesApiTransport implements IAgentTransport {
@@ -184,6 +209,7 @@ export class HermesApiTransport implements IAgentTransport {
 				},
 			],
 		};
+		state.pendingSkillContext = this.buildSkillContext();
 		this.sessionStates.set(sessionId, state);
 		void this.fetchAndEmitGatewayCommands(sessionId);
 		return {
@@ -208,7 +234,11 @@ export class HermesApiTransport implements IAgentTransport {
 
 		this.cancelledSessions.delete(sessionId);
 
-		const input = this.flattenPromptContent(content);
+		let input = this.flattenPromptContent(content);
+		if (state.pendingSkillContext) {
+			input = state.pendingSkillContext + "\n\n" + input;
+			state.pendingSkillContext = undefined;
+		}
 		const model = this.getSessionModel(state) || this.defaultModel;
 		this.logger.log(
 			`[HermesApiTransport] sendPrompt start session=${sessionId} model=${model} inputChars=${input.length}`,
@@ -312,6 +342,21 @@ export class HermesApiTransport implements IAgentTransport {
 						continue;
 					}
 
+					const type = event.type as string | undefined;
+
+					// Emit a visible status line for each tool call so the user sees
+					// activity during the (potentially long) tool-execution phase.
+					if (type === "response.output_item.added") {
+						const item = event.item as Record<string, unknown> | undefined;
+						if (item?.type === "function_call" && typeof item.name === "string") {
+							const emoji = toolEmoji(item.name);
+							const detail = toolDetail(item.name, typeof item.arguments === "string" ? item.arguments : "");
+							const label = detail ? `${item.name} \`${detail}\`` : item.name;
+							onFirstChunk?.();
+							this.emit({ type: "agent_message_chunk", sessionId, text: `_${emoji} ${label}_\n` });
+						}
+					}
+
 					const text = this.extractSseText(event);
 					if (text) {
 						onFirstChunk?.();
@@ -319,7 +364,6 @@ export class HermesApiTransport implements IAgentTransport {
 					}
 
 					// response.completed is the terminal event — emit usage and stop
-					const type = event.type as string | undefined;
 					if (type === "response.completed") {
 						const resp = event.response as Record<string, unknown> | undefined;
 						const usage = resp?.usage as
@@ -642,6 +686,19 @@ export class HermesApiTransport implements IAgentTransport {
 				options: [{ value, name: value }],
 			},
 		];
+	}
+
+	/** Build a skill-load instruction to prepend on the first message of a new session. */
+	private buildSkillContext(): string | undefined {
+		const raw = this.plugin.settings.hermesApi?.autoLoadSkills ?? "";
+		const paths = raw.split("\n").map((p) => p.trim()).filter(Boolean);
+		if (paths.length === 0) return undefined;
+		// Normalise directory paths to SKILL.md — Hermes will read the file itself
+		const filePaths = paths.map((p) => (p.endsWith(".md") ? p : `${p}/SKILL.md`));
+		return (
+			`[Load these skills into context before responding — use read_file on each:]\n` +
+			filePaths.join("\n")
+		);
 	}
 
 	/**

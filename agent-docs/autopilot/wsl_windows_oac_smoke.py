@@ -38,7 +38,7 @@ DEST = Path(
 )
 OUT = Path(os.getenv("OAC_SMOKE_OUTPUT", str(ROOT / "artifacts/oac-smoke/latest.json")))
 AGENT_LOG = Path(os.getenv("HERMES_AGENT_LOG", "/home/zand/.hermes/logs/agent.log"))
-WINDOW_TITLE = os.getenv("OAC_WINDOW_TITLE", "Hermes Test Note")
+WINDOW_TITLE = os.getenv("OAC_WINDOW_TITLE", "OACTest")
 
 
 @dataclass
@@ -75,21 +75,6 @@ def _write_report(report: dict[str, Any]) -> None:
     OUT.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def _get_log_size() -> int:
-    if not AGENT_LOG.exists():
-        return 0
-    return AGENT_LOG.stat().st_size
-
-
-def _read_log_from_offset(offset: int) -> str:
-    if not AGENT_LOG.exists():
-        return ""
-    with AGENT_LOG.open("rb") as f:
-        f.seek(offset)
-        chunk = f.read()
-    return chunk.decode("utf-8", errors="ignore")
-
-
 def _read_log_tail(max_bytes: int = 2_000_000) -> str:
     if not AGENT_LOG.exists():
         return ""
@@ -101,27 +86,21 @@ def _read_log_tail(max_bytes: int = 2_000_000) -> str:
     return chunk.decode("utf-8", errors="ignore")
 
 
-def _verify_roundtrip_signal(prefix: str, baseline_offset: int) -> StepResult:
-    """Wait for a new successful POST response to appear in the gateway log after baseline_offset.
-
-    The gateway's aiohttp access log records POST /v1/responses entries but does not log
-    request body content, so T47_SMOKE_ will not appear verbatim. Instead we verify that a
-    new 200-class gateway response was emitted after the dispatch point.
-    """
+def _verify_roundtrip_signal(prefix: str) -> StepResult:
     deadline = time.time() + 60
-    new_content = ""
+    last_tail = ""
     while time.time() < deadline:
-        new_content = _read_log_from_offset(baseline_offset)
-        if (
-            "POST /v1/chat/completions HTTP/1.1\" 200" in new_content
-            or "POST /v1/responses HTTP/1.1\" 200" in new_content
+        last_tail = _read_log_tail()
+        if prefix in last_tail and (
+            "POST /v1/chat/completions HTTP/1.1\" 200" in last_tail
+            or "POST /v1/responses HTTP/1.1\" 200" in last_tail
         ):
             return StepResult(
                 name="roundtrip-log-assert",
                 ok=True,
                 detail={
                     "prefix": prefix,
-                    "evidence": "new POST 200 gateway response observed after smoke dispatch",
+                    "evidence": "smoke message prefix found + successful gateway completion status line",
                 },
             )
         time.sleep(2)
@@ -131,8 +110,8 @@ def _verify_roundtrip_signal(prefix: str, baseline_offset: int) -> StepResult:
         ok=False,
         detail={
             "prefix": prefix,
-            "reason": "Did not observe new POST /v1/responses 200 in gateway log within timeout after dispatch",
-            "new_log_excerpt": new_content[-1200:],
+            "reason": "Did not observe smoke prefix + successful completion status in agent log within timeout",
+            "log_tail_excerpt": last_tail[-1200:],
         },
     )
 
@@ -227,8 +206,6 @@ def main() -> int:
 
     if restart.ok:
         smoke_prefix = "T47_SMOKE_"
-        # Capture log position before dispatch so roundtrip check only looks at new entries.
-        log_baseline = _get_log_size()
         send_ps = (
             "$ErrorActionPreference='Stop'; "
             "Add-Type -AssemblyName System.Windows.Forms | Out-Null; "
@@ -248,7 +225,7 @@ def main() -> int:
         steps.append(prompt_dispatch)
 
         if prompt_dispatch.ok:
-            steps.append(_verify_roundtrip_signal(smoke_prefix, log_baseline))
+            steps.append(_verify_roundtrip_signal(smoke_prefix))
 
     ok = all(s.ok for s in steps)
     report = {

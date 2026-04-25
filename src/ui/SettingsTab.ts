@@ -164,6 +164,28 @@ export class AgentClientSettingTab extends PluginSettingTab {
 					}),
 			);
 
+		new Setting(containerEl)
+			.setName("Auto-load skills")
+			.setDesc(
+				"Skill paths to inject into context at the start of each new session. " +
+				"One absolute path per line. Point to a SKILL.md file or a skill directory (SKILL.md inside will be used). " +
+				"Applied only on new sessions — not on resume.",
+			)
+			.addTextArea((ta) => {
+				ta.setPlaceholder(
+					"/home/zand/.hermes/skills/dogfood/default-triggers\n/home/zand/.hermes/skills/note-taking/polaris-operations",
+				)
+					.setValue(this.plugin.settings.hermesApi.autoLoadSkills ?? "")
+					.onChange(async (value) => {
+						this.plugin.settings.hermesApi.autoLoadSkills = value;
+						await this.plugin.saveSettings();
+					});
+				ta.inputEl.rows = 5;
+				ta.inputEl.style.width = "100%";
+				ta.inputEl.style.fontFamily = "monospace";
+				ta.inputEl.style.fontSize = "12px";
+			});
+
 		this.renderCustomCommandsEditor(containerEl);
 
 		// ─────────────────────────────────────────────────────────────────────
