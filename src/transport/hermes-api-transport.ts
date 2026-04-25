@@ -135,6 +135,8 @@ interface HermesSessionState {
 	configOptions?: SessionConfigOption[];
 	/** Skill context to prepend on the first sendPrompt of this session, then cleared. */
 	pendingSkillContext?: string;
+	/** ID of the last completed response; used for direct-ID state lookup on subsequent turns. */
+	lastResponseId?: string;
 }
 
 export class HermesApiTransport implements IAgentTransport {
@@ -275,15 +277,18 @@ export class HermesApiTransport implements IAgentTransport {
 	): Promise<boolean> {
 		const abortCtrl = new AbortController();
 		this.sessionAbortControllers.set(sessionId, abortCtrl);
+		const state = this.getSessionState(sessionId);
 		const t0 = performance.now();
 		try {
+			const body: Record<string, unknown> = { model, conversation: sessionId, input, stream: true };
+			if (state.lastResponseId) body.previous_response_id = state.lastResponseId;
 			const response = await fetch(`${this.apiBase}/v1/responses`, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
 					Authorization: `Bearer ${this.liveApiKey}`,
 				},
-				body: JSON.stringify({ model, conversation: sessionId, input, stream: true }),
+				body: JSON.stringify(body),
 				signal: abortCtrl.signal,
 			});
 			const t1 = performance.now();
@@ -366,6 +371,9 @@ export class HermesApiTransport implements IAgentTransport {
 					// response.completed is the terminal event — emit usage and stop
 					if (type === "response.completed") {
 						const resp = event.response as Record<string, unknown> | undefined;
+						if (typeof resp?.id === "string") {
+							this.getSessionState(sessionId).lastResponseId = resp.id;
+						}
 						const usage = resp?.usage as
 							| { input_tokens?: number; output_tokens?: number; total_tokens?: number }
 							| undefined;
@@ -422,13 +430,15 @@ export class HermesApiTransport implements IAgentTransport {
 	): Promise<void> {
 		let payload: Record<string, unknown>;
 		try {
+			const reqBody: Record<string, unknown> = { model, conversation: sessionId, input };
+			if (state.lastResponseId) reqBody.previous_response_id = state.lastResponseId;
 			payload = await this.requestJson("/v1/responses", {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
 					Authorization: `Bearer ${this.liveApiKey}`,
 				},
-				body: JSON.stringify({ model, conversation: sessionId, input }),
+				body: JSON.stringify(reqBody),
 			});
 		} catch (err) {
 			if (this.cancelledSessions.has(sessionId)) {
@@ -443,6 +453,9 @@ export class HermesApiTransport implements IAgentTransport {
 			return;
 		}
 
+		if (typeof payload.id === "string") {
+			state.lastResponseId = payload.id;
+		}
 		const outputText = this.extractOutputText(payload);
 		this.logger.log(
 			`[HermesApiTransport] /v1/responses outputChars=${outputText.length}`,
