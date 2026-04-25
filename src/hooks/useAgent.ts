@@ -9,7 +9,7 @@ import * as React from "react";
 const { useState, useCallback, useEffect, useMemo } = React;
 
 import type { SessionUpdate } from "../types/session";
-import type { AcpClient } from "../acp/acp-client";
+import type { IAgentTransport } from "../types/transport";
 import type { IVaultAccess } from "../services/vault-service";
 import type { ISettingsAccess } from "../services/settings-service";
 import type { ErrorInfo } from "../types/errors";
@@ -76,6 +76,8 @@ export interface UseAgentReturn {
 	setConfigOption: (configId: string, value: string) => Promise<void>;
 
 	// Message operations
+	addMessage: (message: ChatMessage) => void;
+	replaceMessage: (id: string, updated: ChatMessage) => void;
 	sendMessage: (
 		content: string,
 		options: SendMessageOptions,
@@ -112,7 +114,7 @@ export interface UseAgentReturn {
  * @param initialAgentId - Optional initial agent ID (from view persistence)
  */
 export function useAgent(
-	agentClient: AcpClient,
+	agentClient: IAgentTransport,
 	settingsAccess: ISettingsAccess,
 	vaultAccess: IVaultAccess & IMentionService,
 	workingDirectory: string,
@@ -169,6 +171,11 @@ export function useAgent(
 	// Return
 	// ============================================================
 
+	const cancelOperation = useCallback(async () => {
+		await agentSession.cancelOperation();
+		agentMessages.clearSending();
+	}, [agentSession.cancelOperation, agentMessages.clearSending]);
+
 	return useMemo(
 		() => ({
 			// Session state
@@ -188,7 +195,7 @@ export function useAgent(
 			restartSession: agentSession.restartSession,
 			closeSession: agentSession.closeSession,
 			forceRestartAgent: agentSession.forceRestartAgent,
-			cancelOperation: agentSession.cancelOperation,
+			cancelOperation,
 			getAvailableAgents: agentSession.getAvailableAgents,
 			updateSessionFromLoad: agentSession.updateSessionFromLoad,
 
@@ -198,6 +205,8 @@ export function useAgent(
 			setConfigOption: agentSession.setConfigOption,
 
 			// Message operations
+			addMessage: agentMessages.addMessage,
+			replaceMessage: agentMessages.replaceMessage,
 			sendMessage: agentMessages.sendMessage,
 			clearMessages: agentMessages.clearMessages,
 			setInitialMessages: agentMessages.setInitialMessages,
@@ -223,12 +232,14 @@ export function useAgent(
 			agentSession.restartSession,
 			agentSession.closeSession,
 			agentSession.forceRestartAgent,
-			agentSession.cancelOperation,
+			cancelOperation,
 			agentSession.getAvailableAgents,
 			agentSession.updateSessionFromLoad,
 			agentSession.setMode,
 			agentSession.setModel,
 			agentSession.setConfigOption,
+			agentMessages.addMessage,
+			agentMessages.replaceMessage,
 			agentMessages.sendMessage,
 			agentMessages.clearMessages,
 			agentMessages.setInitialMessages,

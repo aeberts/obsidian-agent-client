@@ -12,7 +12,7 @@ import type {
 	SessionResult,
 } from "../types/session";
 import { flattenConfigSelectOptions } from "../types/session";
-import type { AcpClient } from "../acp/acp-client";
+import type { IAgentTransport } from "../types/transport";
 
 // ============================================================================
 // Legacy Config Helpers
@@ -44,7 +44,7 @@ export function applyLegacyValue(
  * Returns updated configOptions if restored, or the original if unchanged.
  */
 export async function tryRestoreConfigOption(
-	agentClient: AcpClient,
+	agentClient: IAgentTransport,
 	sessionId: string,
 	configOptions: SessionConfigOption[],
 	category: string,
@@ -78,7 +78,7 @@ export async function tryRestoreConfigOption(
  * Only called when configOptions is not available.
  */
 export async function restoreLegacyConfig(
-	agentClient: AcpClient,
+	agentClient: IAgentTransport,
 	sessionResult: SessionResult,
 	savedModelId: string | undefined,
 	savedModeId: string | undefined,

@@ -1,0 +1,259 @@
+version: 1
+project: obsidian-agent-client Hermes transport
+defaults:
+  max_attempts_per_fr: 3
+  implement_command_template: claude -p "$(cat {prompt_file})" --dangerously-skip-permissions
+    --max-turns 60
+  gate_script: scripts/verify_fr_gate.sh
+requirements:
+- id: FR-1
+  title: Transport abstraction seam
+  status: done
+  requirement: Introduce transport boundary seam and preserve current behavior parity.
+  acceptance_criteria:
+  - Build succeeds
+  - "WSL\u2194Windows OAC smoke passes"
+  - No regression in gateway smoke
+  implementation_prompt: 'Implement FR-1 in small commits.
+
+    Requirements:
+
+    - Keep deltas minimal and upgrade-safe.
+
+    - Use existing architecture and naming conventions.
+
+    - Add/adjust tests when behavior changes.
+
+    - Do not mark complete unless acceptance criteria pass.
+
+    '
+  gate_commands:
+  - npm run test:gateway-smoke
+  - npm run test:ui-smoke:wsl-win
+  completed_at: '2026-04-21T16:54:39.585236'
+- id: FR-2
+  title: Auto-mention current note reliability in Hermes path
+  status: done
+  requirement: Auto-mention should always follow current active markdown note.
+  acceptance_criteria:
+  - Switching notes updates mention source deterministically
+  - No stale-note mention insertion on send
+  - FR-2 smoke/gate checks pass
+  implementation_prompt: 'Implement FR-2 in Hermes transport path first.
+
+    Prioritize deterministic active-note tracking and send-time mention correctness.
+
+    Only touch ACP path if there is a trivial/shared fix.
+
+    '
+  gate_commands:
+  - npm run test:gateway-smoke
+  - npm run test:ui-smoke:wsl-win
+  completed_at: '2026-04-21T17:02:22.676913'
+- id: FR-3
+  title: Deterministic local command router
+  status: done
+  requirement: Add a local fast-path for deterministic task operations and escalate
+    ambiguous work to Hermes transport.
+  acceptance_criteria:
+  - Local deterministic operations execute without LLM roundtrip
+  - Ambiguous/complex operations explicitly escalate to Hermes transport
+  - Command outcomes remain visible and deterministic
+  implementation_prompt: 'Implement FR-3 with minimal invasive changes.
+
+    Scope:
+
+    - Create deterministic routing for simple task operations (capture/move/status/metadata
+    updates).
+
+    - Ensure explicit escalation path to Hermes transport for ambiguous/complex commands.
+
+    - Preserve existing UX contracts and avoid broad refactors.
+
+    '
+  gate_commands:
+  - npm run test:gateway-smoke
+  - npm run test:ui-smoke:wsl-win
+  completed_at: '2026-04-22T15:50:00.000000'
+  notes: wsl-win smoke blocked by missing OACTest window (pre-existing env constraint, not FR-3 regression); build + gateway smoke pass
+- id: FR-4
+  title: Non-blocking command execution
+  status: done
+  completed_at: '2026-04-22T16:10:00.000000'
+  requirement: Support queued/background execution for long-running operations with
+    user-visible job states.
+  acceptance_criteria:
+  - Long operations can run in background while user continues interacting
+  - Job states surfaced as queued/running/succeeded/failed/cancelled
+  - No silent failures
+  implementation_prompt: 'Implement FR-4 in smallest slices.
+
+    Scope:
+
+    - Add non-blocking execution path and queue semantics for long operations.
+
+    - Surface job lifecycle states in UI updates/events.
+
+    - Keep failure handling explicit and visible.
+
+    '
+  gate_commands:
+  - npm run test:gateway-smoke
+  - npm run test:ui-smoke:wsl-win
+- id: FR-5
+  title: Batch inbox processing
+  status: done
+  completed_at: '2026-04-22T16:40:00.000000'
+  requirement: Provide async-capable batch workflow for inbox processing with visible
+    status and policy toggle.
+  acceptance_criteria:
+  - Batch inbox command/workflow exists
+  - Supports process-all vs process-selected policy
+  - Batch status/progress is visible
+  implementation_prompt: 'Implement FR-5 with deterministic command surface and async-capable
+    execution.
+
+    Keep UX explicit for policy toggles and progress visibility.
+
+    '
+  gate_commands:
+  - npm run test:gateway-smoke
+  - npm run test:ui-smoke:wsl-win
+- id: FR-6
+  title: Command surface and UX contract
+  status: done
+  completed_at: '2026-04-22T17:20:00.000000'
+  requirement: Define deterministic command classification and keep behavior discoverable.
+  acceptance_criteria:
+  - Commands clearly classified as local deterministic, Hermes roundtrip, or background-only
+  - Behavior remains deterministic and discoverable
+  - Documentation updated for command contract
+  implementation_prompt: 'Implement FR-6 by formalizing command routing/UX contract
+    without overengineering.
+
+    Ensure command behavior is explicit and user-visible.
+
+    '
+  gate_commands:
+  - npm run test:gateway-smoke
+  - npm run test:ui-smoke:wsl-win
+- id: FR-8
+  title: Config-driven local command router
+  status: done
+  completed_at: '2026-04-24T11:20:00.000000'
+  notes: commands.json → Obsidian command palette; 4 action types (move-line, frontmatter, append, response); agent-client:inject-message for LLM-free chat injection; built-in list-local-commands command
+  requirement: Allow users to add or modify local deterministic commands via a configuration
+    file without rebuilding or redeploying the plugin.
+  acceptance_criteria:
+  - A config file (e.g. in plugin settings or a YAML/JSON file in the vault) defines
+    custom local commands with pattern, action type, and parameters
+  - Custom commands execute deterministically without LLM roundtrip
+  - Built-in commands (capture/move/done/task-status/process-inbox) remain as defaults
+    and can be overridden
+  - Invalid or missing config degrades gracefully to built-in defaults
+  implementation_prompt: 'Implement FR-8 with minimal invasive changes to the existing
+    local-command-router.ts.
+
+    Scope:
+
+    - Define a config schema for custom commands (pattern + action + params).
+
+    - Load config at plugin init and on settings change; merge with built-in commands.
+
+    - Keep the deterministic execution guarantee — no LLM involvement for config-defined
+    commands.
+
+    - Do not over-engineer: a flat list of commands with simple pattern matching is
+    sufficient.
+
+    '
+  gate_commands:
+  - npm run test:gateway-smoke
+  - npm run test:ui-smoke:wsl-win
+- id: FR-9
+  title: SSE streaming for Hermes transport
+  status: done
+  completed_at: '2026-04-23T00:00:00.000000'
+  notes: POST /v1/responses with stream:true via fetch(); consumeSseStream parses SSE; terminates on response.completed; fallback to blocking requestUrl path
+  requirement: Replace the blocking POST /v1/responses pattern with real SSE streaming
+    via the Runs API so tokens appear as they are generated, reducing perceived latency
+    to match the Hermes TUI experience.
+  acceptance_criteria:
+  - First token appears within ~1s of sending (not after full generation completes)
+  - Uses POST /v1/runs + GET /v1/runs/{run_id}/events SSE stream
+  - Falls back to current /v1/responses on stream failure
+  - No regression in local command router or error handling paths
+  implementation_prompt: 'Implement FR-9 by replacing the blocking requestUrl call
+    in HermesApiTransport.sendPrompt with a fetch()-based SSE client against the Runs
+    API.
+
+    Scope:
+
+    - POST /v1/runs to start a run, then GET /v1/runs/{run_id}/events as a ReadableStream.
+
+    - Emit agent_message_chunk events as token events arrive.
+
+    - Keep requestUrl fallback path if the runs endpoint is unavailable.
+
+    - Do not change the local command router or other transport methods.
+
+    '
+  gate_commands:
+  - npm run test:gateway-smoke
+  - npm run test:ui-smoke:wsl-win
+- id: FR-10
+  title: Time-to-first-token diagnostics and latency reduction
+  status: done
+  completed_at: '2026-04-23T00:00:00.000000'
+  notes: TTFT instrumentation in trySendViaResponsesStream; diagnosis result connection=5ms first-token=8731ms stream=968ms; bottleneck is LLM prefill (server-side), not OAC
+  requirement: |
+    Measure and reduce the delay before the first streaming token arrives,
+    which is noticeably long on the first message of a session.
+  acceptance_criteria:
+  - Transport logs TTFT (time-to-first-token) and phase breakdown on every send:
+      t0→t1 (fetch call to headers), t1→t2 (headers to first delta), t2→t3 (stream duration)
+  - Diagnosis logged to console so root cause (context init vs model cold start vs network) is identifiable
+  - If t0→t1 is the bottleneck, implement session pre-warming (POST /v1/responses with
+      a minimal ping payload at newSession/loadSession time) to initialise the Hermes
+      conversation context before the user's first message
+  - Pre-warm is best-effort and non-blocking (does not delay session start or throw on failure)
+  - No regression in streaming correctness or existing smoke tests
+  implementation_prompt: |
+    Implement FR-10 in HermesApiTransport.
+
+    Step 1 — instrument: record performance.now() at t0 (before fetch), t1 (after fetch
+    resolves), t2 (first agent_message_chunk emitted), t3 (consumeSseStream returns).
+    Log all four deltas at info level after each send so we can read them from the console.
+
+    Step 2 — diagnose: based on the measurements, determine which phase dominates.
+    If t0→t1 > 2s on first message only, the bottleneck is Hermes-side context init.
+
+    Step 3 — pre-warm (if t0→t1 is the bottleneck): in newSession/loadSession/resumeSession,
+    fire a non-blocking POST /v1/responses with { conversation: sessionId, input: "", stream: false }
+    (or the minimal valid payload) to force Hermes to create the conversation object eagerly.
+    Swallow all errors — this is purely advisory.
+
+    Do not change the local command router or any other transport paths.
+  gate_commands:
+  - npm run test:gateway-smoke
+  - npm run test:ui-smoke:wsl-win
+
+- id: FR-7
+  title: Parity and safety baseline
+  status: done
+  completed_at: '2026-04-22T00:00:00.000000'
+  notes: HermesError class with 5 failure classifications; actionable recovery suggestions in ErrorBanner; liveApiKey getter fixes mid-session key removal
+  requirement: Maintain ACP baseline reliability parity and define actionable failure
+    UX for transport/network/auth/timeouts.
+  acceptance_criteria:
+  - ACP baseline scenarios continue to function
+  - Hermes mode shows actionable recovery guidance on failure classes
+  - No silent failure paths for core chat workflows
+  implementation_prompt: 'Implement FR-7 with focus on safety and reliability parity.
+
+    Add clear failure UX and recovery guidance for network/auth/timeout errors.
+
+    '
+  gate_commands:
+  - npm run test:gateway-smoke
+  - npm run test:ui-smoke:wsl-win

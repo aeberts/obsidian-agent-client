@@ -2,7 +2,7 @@ import * as React from "react";
 const { useRef, useState, useEffect, useCallback } = React;
 
 import type { ChatMessage } from "../types/chat";
-import type { AcpClient } from "../acp/acp-client";
+import type { IAgentTransport } from "../types/transport";
 import type AgentClientPlugin from "../plugin";
 import type { IChatViewHost } from "./view-host";
 import { setIcon } from "obsidian";
@@ -28,7 +28,7 @@ export interface MessageListProps {
 	/** View instance for event registration */
 	view: IChatViewHost;
 	/** Terminal client for output polling */
-	terminalClient?: AcpClient;
+	terminalClient?: IAgentTransport;
 	/** Callback to approve a permission request */
 	onApprovePermission?: (
 		requestId: string,

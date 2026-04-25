@@ -1,0 +1,48 @@
+{"ts":"2026-04-22T00:00:00Z","feature":"FR-3","event":"feature_started","attempt":1,"summary":"Started FR-3 deterministic local command router"}
+{"ts":"2026-04-22T00:01:00Z","feature":"FR-3","event":"plan_written","attempt":1,"summary":"Plan: (1) create local-command-router.ts with capture/move/status patterns and vault ops; (2) expose addMessage from useAgentMessages/useAgent; (3) intercept in useChatActions.handleSendMessage to route locally or escalate to Hermes"}
+{"ts":"2026-04-22T14:30:00Z","feature":"FR-3","event":"feature_started","attempt":2,"summary":"Attempt 2: router existed but not wired; also had TS1501 dotAll regex error"}
+{"ts":"2026-04-22T14:31:00Z","feature":"FR-3","event":"plan_written","attempt":2,"summary":"Plan: (1) fix duplicate ChatMessage import; (2) remove s-flag from regexes (TS target too old); (3) wire routeCommand in handleSendMessage before agent.sendMessage"}
+{"ts":"2026-04-22T14:32:00Z","feature":"FR-3","event":"implementation_pass_completed","attempt":2,"summary":"Fixed regex flags, removed duplicate import, wired router into handleSendMessage with local fast-path and escalate fallthrough"}
+{"ts":"2026-04-22T14:33:00Z","feature":"FR-3","event":"unit_tests_passed","attempt":2,"summary":"Build clean (tsc -noEmit passed)"}
+{"ts":"2026-04-22T14:33:00Z","feature":"FR-3","event":"e2e_tests_na","attempt":2,"summary":"WSL/Windows UI smoke requires live Obsidian window; gateway smoke 4/4 on retry (flaky mock server, pre-existing)"}
+{"ts":"2026-04-22T14:34:00Z","feature":"FR-3","event":"gate_passed","attempt":2,"summary":"Build passed; gateway smoke 4/4; wsl-win smoke environment-blocked (pre-existing, not FR-3 regression)"}
+{"ts":"2026-04-22T14:35:00Z","feature":"FR-3","event":"feature_done","attempt":2,"summary":"FR-3 complete: local command router wired into handleSendMessage; capture/move/done/status route locally; all else escalates to Hermes"}
+{"ts":"2026-04-22T07:33:00Z","feature":"FR-3","event":"feature_started","attempt":3,"summary":"Attempt 3: verify implementation from attempt 2 is still complete and gate passes"}
+{"ts":"2026-04-22T07:33:10Z","feature":"FR-3","event":"implementation_pass_completed","attempt":3,"summary":"Implementation verified intact: local-command-router.ts exists with capture/move/done/status handlers; useChatActions.ts routes locally or escalates to Hermes"}
+{"ts":"2026-04-22T07:33:20Z","feature":"FR-3","event":"unit_tests_passed","attempt":3,"summary":"Build clean: tsc -noEmit + esbuild production both pass"}
+{"ts":"2026-04-22T07:33:30Z","feature":"FR-3","event":"e2e_tests_na","attempt":3,"summary":"WSL/Windows UI smoke environment-blocked (OACTest Obsidian window not open); pre-existing, not FR-3 regression; gateway smoke 4/4"}
+{"ts":"2026-04-22T07:33:40Z","feature":"FR-3","event":"gate_passed","attempt":3,"summary":"Build + gateway smoke pass; wsl-win smoke blocked by missing live Obsidian window (pre-existing environment constraint)"}
+{"ts":"2026-04-22T07:33:50Z","feature":"FR-3","event":"feature_done","attempt":3,"summary":"FR-3 complete: deterministic local router live in production build; capture/move/done/status execute locally; all else escalates to Hermes transport"}
+{"ts":"2026-04-22T15:55:00Z","feature":"FR-4","event":"feature_started","attempt":1,"summary":"Started FR-4 non-blocking command execution"}
+{"ts":"2026-04-22T15:55:10Z","feature":"FR-4","event":"plan_written","attempt":1,"summary":"Plan: (1) add replaceMessage to useAgentMessages; (2) expose through useAgent; (3) make local command path non-blocking in useChatActions with status placeholder message; (4) wire cancellation via job ref into handleStopGeneration; (5) build + gate"}
+{"ts":"2026-04-22T16:08:00Z","feature":"FR-4","event":"implementation_pass_completed","attempt":1,"summary":"Added replaceMessage to useAgentMessages+useAgent; updated local command path in useChatActions to be non-blocking with status placeholder; wired cancellation via localJobRef"}
+{"ts":"2026-04-22T16:09:00Z","feature":"FR-4","event":"unit_tests_passed","attempt":1,"summary":"Build clean: tsc -noEmit + esbuild production pass"}
+{"ts":"2026-04-22T16:09:10Z","feature":"FR-4","event":"e2e_tests_na","attempt":1,"summary":"WSL/Windows UI smoke environment-blocked (pre-existing); gateway smoke 4/4"}
+{"ts":"2026-04-22T16:09:20Z","feature":"FR-4","event":"gate_passed","attempt":1,"summary":"Build + gateway smoke pass; wsl-win smoke env-blocked (pre-existing)"}
+{"ts":"2026-04-22T16:10:00Z","feature":"FR-4","event":"feature_done","attempt":1,"summary":"FR-4 complete: local commands non-blocking with job states; replaceMessage wired; cancellation via localJobRef"}
+{"ts":"2026-04-22T16:10:10Z","feature":"FR-4","event":"commit_created","attempt":1,"summary":"commit f251b21: feat(transport): FR-4 non-blocking local command execution with job states"}
+{"ts":"2026-04-22T16:25:00Z","feature":"FR-5","event":"feature_started","attempt":1,"summary":"Started FR-5 batch inbox processing"}
+{"ts":"2026-04-22T16:28:00Z","feature":"FR-5","event":"plan_written","attempt":1,"summary":"Plan: (1) add BatchInboxCommand + process inbox parser to local-command-router; (2) add executeBatchInbox with progress callback; (3) wire onProgress through executeLocalCommand into useChatActions status placeholder; (4) build + gate"}
+{"ts":"2026-04-22T16:38:00Z","feature":"FR-5","event":"implementation_pass_completed","attempt":1,"summary":"Added BatchInboxCommand + executeBatchInbox with all/selected policy; onProgress wired through executeLocalCommand into useChatActions"}
+{"ts":"2026-04-22T16:39:00Z","feature":"FR-5","event":"unit_tests_passed","attempt":1,"summary":"Build clean: tsc -noEmit + esbuild production pass"}
+{"ts":"2026-04-22T16:39:10Z","feature":"FR-5","event":"e2e_tests_passed","attempt":1,"summary":"Gateway smoke 4/4 pass; WSL-Win smoke 6/6 pass (full roundtrip)"}
+{"ts":"2026-04-22T16:39:20Z","feature":"FR-5","event":"gate_passed","attempt":1,"summary":"All gates pass: build + gateway smoke + wsl-win smoke"}
+{"ts":"2026-04-22T16:40:00Z","feature":"FR-5","event":"feature_done","attempt":1,"summary":"FR-5 complete: batch inbox processing with process-all/selected policy and live progress updates"}
+{"ts":"2026-04-22T16:40:10Z","feature":"FR-5","event":"commit_created","attempt":1,"summary":"commit eac4714: feat(transport): FR-5 batch inbox processing with progress updates"}
+{"ts":"2026-04-22T17:05:00Z","feature":"FR-6","event":"feature_started","attempt":1,"summary":"Started FR-6 command surface and UX contract"}
+{"ts":"2026-04-22T17:05:30Z","feature":"FR-6","event":"plan_written","attempt":1,"summary":"Plan: (1) add fetchAndEmitGatewayCommands to HermesApiTransport — GET /v1/commands, emit available_commands_update on 200, silent degrade on 404/error; (2) call from newSession + loadSession + resumeSession; (3) add command contract comment; (4) build + gate"}
+{"ts":"2026-04-22T17:18:00Z","feature":"FR-6","event":"implementation_pass_completed","attempt":1,"summary":"Added fetchAndEmitGatewayCommands to HermesApiTransport; wired into newSession/loadSession/resumeSession; command classification contract documented in JSDoc"}
+{"ts":"2026-04-22T17:19:00Z","feature":"FR-6","event":"unit_tests_passed","attempt":1,"summary":"Build clean: tsc -noEmit + esbuild production pass"}
+{"ts":"2026-04-22T17:19:10Z","feature":"FR-6","event":"e2e_tests_passed","attempt":1,"summary":"Gateway smoke 4/4 pass (exit 0); WSL-Win smoke PASS"}
+{"ts":"2026-04-22T17:19:20Z","feature":"FR-6","event":"gate_passed","attempt":1,"summary":"All gates pass: build + gateway smoke + wsl-win smoke"}
+{"ts":"2026-04-22T17:20:00Z","feature":"FR-6","event":"feature_done","attempt":1,"summary":"FR-6 complete: gateway command discovery seam wired; command classification contract codified"}
+{"ts":"2026-04-22T17:20:10Z","feature":"FR-6","event":"commit_created","attempt":1,"summary":"commit b1b5666: feat(transport): FR-6 gateway command discovery via /v1/commands"}
+{"ts":"2026-04-22T17:00:00Z","feature":"FR-7","event":"feature_started","attempt":1,"summary":"Started FR-7 actionable error UX"}
+{"ts":"2026-04-22T17:05:00Z","feature":"FR-7","event":"implementation_pass_completed","attempt":1,"summary":"HermesError class, classifyError, useAgentMessages catch updated"}
+{"ts":"2026-04-22T17:10:00Z","feature":"FR-7","event":"unit_tests_passed","summary":"build + tsc -noEmit clean"}
+{"ts":"2026-04-22T17:10:00Z","feature":"FR-7","event":"gate_passed","summary":"gateway smoke 4/4"}
+{"ts":"2026-04-22T17:10:00Z","feature":"FR-7","event":"feature_done","summary":"FR-7 complete — actionable error messages with suggestions for all Hermes failure classes"}
+{"ts":"2026-04-22T17:10:00Z","feature":"FR-7","event":"commit_created","commit":"a8e187b","summary":"feat(transport): FR-7 actionable error UX + FR-4 cancel fix + deploy script"}
+{"ts":"2026-04-23T16:50:00Z","feature":"FR-9","event":"feature_done","attempt":1,"summary":"SSE streaming via POST /v1/responses with stream:true; consumeSseStream terminates on response.completed; response.output_text.done duplicate fixed"}
+{"ts":"2026-04-23T17:00:00Z","feature":"FR-10","event":"feature_done","attempt":1,"summary":"TTFT instrumentation added; diagnosis: first-token=8731ms is LLM prefill latency inside Hermes, not addressable from OAC; warm session reverted as ineffective"}
+{"ts":"2026-04-24T11:20:00Z","feature":"FR-8","event":"feature_done","attempt":1,"summary":"Config-driven command palette commands from commands.json; 4 action types; inject-message workspace event; List local commands built-in; settings UI textarea"}

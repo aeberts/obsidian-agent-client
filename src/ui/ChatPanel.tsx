@@ -18,7 +18,7 @@ import { ChangeDirectoryModal } from "./ChangeDirectoryModal";
 import { getLogger } from "../utils/logger";
 
 // Adapter imports
-import type { AcpClient } from "../acp/acp-client";
+import type { IAgentTransport } from "../types/transport";
 
 // Context imports
 import { useChatContext } from "./ChatContext";
@@ -41,6 +41,37 @@ import { checkAgentUpdate } from "../services/update-checker";
 
 /** Stable empty array for useSuggestions when no commands available */
 const EMPTY_COMMANDS: SlashCommand[] = [];
+
+/** Local deterministic commands always available regardless of agent session */
+const LOCAL_COMMANDS: SlashCommand[] = [
+	{
+		name: "capture",
+		description: "Capture a task to your inbox",
+		hint: "task text",
+	},
+	{
+		name: "move",
+		description: "Move a task to another note",
+		hint: "task text to destination",
+	},
+	{
+		name: "done",
+		description: "Mark a task as done",
+		hint: "task text",
+	},
+	{
+		// "status" is intentionally omitted here — Hermes owns /status (session info).
+		// The local task-status router still handles "status <task> <state>" when typed in full.
+		name: "task-status",
+		description: "Set task status (done | todo | in-progress)",
+		hint: "task text done|todo|in-progress",
+	},
+	{
+		name: "process-inbox",
+		description: "Batch-process inbox tasks (mark done + archive)",
+		hint: "all | 1,2,3",
+	},
+];
 
 // Component imports
 import { ChatHeader } from "./ChatHeader";
@@ -184,10 +215,15 @@ export function ChatPanel({
 		errorInfo,
 	} = agent;
 
+	const allAvailableCommands = useMemo(
+		() => [...LOCAL_COMMANDS, ...(session.availableCommands || [])],
+		[session.availableCommands],
+	);
+
 	const suggestions = useSuggestions(
 		vaultService,
 		plugin,
-		session.availableCommands || EMPTY_COMMANDS,
+		allAvailableCommands,
 	);
 
 	// Session history hook with callback for session load
@@ -240,7 +276,7 @@ export function ChatPanel({
 	// ============================================================
 	// Refs
 	// ============================================================
-	const terminalClientRef = useRef<AcpClient>(acpClient);
+	const terminalClientRef = useRef<IAgentTransport>(acpClient);
 
 	// ============================================================
 	// Computed Values
@@ -778,12 +814,16 @@ export function ChatPanel({
 	const rejectActivePermissionRef = useRef(agent.rejectActivePermission);
 	const handleStopGenerationRef = useRef(handleStopGeneration);
 	const handleExportChatRef = useRef(handleExportChat);
+	const handleRestartAgentRef = useRef(handleRestartAgent);
+	const addMessageRef = useRef(agent.addMessage);
 	handleNewChatWithPersistRef.current = handleNewChatWithPersist;
 	handleNewChatRef.current = handleNewChat;
 	approveActivePermissionRef.current = agent.approveActivePermission;
 	rejectActivePermissionRef.current = agent.rejectActivePermission;
 	handleStopGenerationRef.current = handleStopGeneration;
 	handleExportChatRef.current = handleExportChat;
+	handleRestartAgentRef.current = handleRestartAgent;
+	addMessageRef.current = agent.addMessage;
 
 	useEffect(() => {
 		const workspace = plugin.app.workspace;
@@ -862,6 +902,37 @@ export function ChatPanel({
 				if (targetViewId && targetViewId !== viewId) return;
 				void handleExportChatRef.current();
 			}),
+
+			// Restart agent
+			ws.on("agent-client:restart-agent-requested", (targetViewId?: string) => {
+				if (targetViewId && targetViewId !== viewId) return;
+				void handleRestartAgentRef.current();
+			}),
+
+			// Send smoke message (automation helper)
+			ws.on(
+				"agent-client:send-smoke-message",
+				(targetViewId?: string) => {
+					if (targetViewId && targetViewId !== viewId) return;
+					const smokeMessage = `T47_SMOKE_${Date.now()}`;
+					void handleSendMessageRef.current(smokeMessage);
+				},
+			),
+
+			// Inject markdown into chat without LLM call (custom commands, FR-8)
+			ws.on(
+				"agent-client:inject-message",
+				(targetViewId?: string, markdown?: string) => {
+					if (targetViewId && targetViewId !== viewId) return;
+					if (!markdown) return;
+					addMessageRef.current({
+						id: crypto.randomUUID(),
+						role: "assistant",
+						content: [{ type: "text", text: markdown }],
+						timestamp: new Date(),
+					});
+				},
+			),
 		];
 
 		return () => {

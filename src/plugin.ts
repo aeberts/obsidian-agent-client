@@ -19,6 +19,12 @@ import {
 } from "./services/settings-service";
 import { AgentClientSettingTab } from "./ui/SettingsTab";
 import { AcpClient } from "./acp/acp-client";
+import { HermesApiTransport } from "./transport/hermes-api-transport";
+import type { IAgentTransport, TransportMode } from "./types/transport";
+import {
+	executeCustomCommand,
+	type CustomCommandDef,
+} from "./transport/local-command-router";
 import {
 	sanitizeArgs,
 	normalizeEnvVars,
@@ -73,6 +79,14 @@ export interface AgentClientPluginSettings {
 	customAgents: CustomAgentSettings[];
 	/** Default agent ID for new views (renamed from activeAgentId for multi-session) */
 	defaultAgentId: string;
+	/** Transport backend selection */
+	transportMode: TransportMode;
+	/** Hermes API transport settings */
+	hermesApi: {
+		endpoint: string;
+		apiKey: string;
+		defaultModel: string;
+	};
 	autoAllowPermissions: boolean;
 	autoMentionActiveNote: boolean;
 	/** Show OS system notifications on response completion and permission requests */
@@ -147,6 +161,12 @@ const DEFAULT_SETTINGS: AgentClientPluginSettings = {
 	},
 	customAgents: [],
 	defaultAgentId: "claude-code-acp",
+	transportMode: "acp",
+	hermesApi: {
+		endpoint: "http://127.0.0.1:8642",
+		apiKey: "",
+		defaultModel: "gpt-5.3-codex",
+	},
 	autoAllowPermissions: false,
 	autoMentionActiveNote: true,
 	enableSystemNotifications: true,
@@ -192,8 +212,10 @@ export default class AgentClientPlugin extends Plugin {
 	/** Registry for all chat view containers (sidebar + floating) */
 	viewRegistry = new ChatViewRegistry();
 
-	/** Map of viewId to AcpClient for multi-session support */
-	private _acpClients: Map<string, AcpClient> = new Map();
+	/** Map of viewId to transport client for multi-session support */
+	private _acpClients: Map<string, IAgentTransport> = new Map();
+	/** Custom commands loaded from commands.json (FR-8) */
+	private customCommandDefs: CustomCommandDef[] = [];
 	/** Floating button container (independent from chat view instances) */
 	private floatingButton: FloatingButtonContainer | null = null;
 	/** Counter for generating unique floating chat instance IDs */
@@ -203,6 +225,7 @@ export default class AgentClientPlugin extends Plugin {
 		await this.loadSettings();
 
 		initializeLogger(this.settings);
+		console.log("[OAC] v0.6.2 loaded");
 
 		// Initialize settings store
 		this.settingsService = createSettingsService(this.settings, this);
@@ -256,6 +279,7 @@ export default class AgentClientPlugin extends Plugin {
 		this.registerAgentCommands();
 		this.registerPermissionCommands();
 		this.registerBroadcastCommands();
+		void this.registerCustomCommands();
 
 		// Floating chat window commands
 		this.addCommand({
@@ -368,15 +392,19 @@ export default class AgentClientPlugin extends Plugin {
 	}
 
 	/**
-	 * Get or create an AcpClient for a specific view.
-	 * Each ChatView has its own AcpClient for independent sessions.
+	 * Get or create a transport client for a specific view.
+	 * Each ChatView has its own client for independent sessions.
 	 */
-	getOrCreateAcpClient(viewId: string): AcpClient {
-		let client = this._acpClients.get(viewId);
-		if (!client) {
-			client = new AcpClient(this);
-			this._acpClients.set(viewId, client);
+	getOrCreateAcpClient(viewId: string): IAgentTransport {
+		const existing = this._acpClients.get(viewId);
+		if (existing) {
+			return existing;
 		}
+		const client =
+			this.settings.transportMode === "hermes-api"
+				? new HermesApiTransport(this)
+				: new AcpClient(this);
+		this._acpClients.set(viewId, client);
 		return client;
 	}
 
@@ -707,6 +735,28 @@ export default class AgentClientPlugin extends Plugin {
 		});
 
 		this.addCommand({
+			id: "restart-agent",
+			name: "Restart agent",
+			callback: () => {
+				this.app.workspace.trigger(
+					"agent-client:restart-agent-requested" as "quit",
+					this.lastActiveChatViewId,
+				);
+			},
+		});
+
+		this.addCommand({
+			id: "send-smoke-message",
+			name: "Send smoke message",
+			callback: () => {
+				this.app.workspace.trigger(
+					"agent-client:send-smoke-message" as "quit",
+					this.lastActiveChatViewId,
+				);
+			},
+		});
+
+		this.addCommand({
 			id: "cancel-current-message",
 			name: "Cancel current message",
 			callback: () => {
@@ -827,6 +877,128 @@ export default class AgentClientPlugin extends Plugin {
 		new Notice("[Agent Client] Cancel broadcast to all views");
 	}
 
+	// ============================================================
+	// Custom Commands (FR-8)
+	// ============================================================
+
+	private async loadCustomCommands(): Promise<CustomCommandDef[]> {
+		const path = `${this.manifest.dir}/commands.json`;
+		try {
+			const raw = await this.app.vault.adapter.read(path);
+			const parsed = JSON.parse(raw) as unknown;
+			if (!Array.isArray(parsed)) return [];
+			const valid = ["append", "move-line", "frontmatter", "response"];
+			const defs: CustomCommandDef[] = [];
+			for (const entry of parsed) {
+				if (typeof entry !== "object" || entry === null) continue;
+				const e = entry as Record<string, unknown>;
+				if (
+					typeof e.id !== "string" ||
+					typeof e.name !== "string" ||
+					typeof e.action !== "string"
+				)
+					continue;
+				if (!valid.includes(e.action)) {
+					console.warn(
+						`[OAC] commands.json: unknown action "${e.action}" for "${e.id}" — skipping`,
+					);
+					continue;
+				}
+				defs.push(e as unknown as CustomCommandDef);
+			}
+			return defs;
+		} catch {
+			return [];
+		}
+	}
+
+	async registerCustomCommands(): Promise<void> {
+		this.customCommandDefs = await this.loadCustomCommands();
+
+		for (const def of this.customCommandDefs) {
+			if (def.action === "move-line" || def.action === "append") {
+				// Requires active editor — only shown when a markdown editor is open
+				this.addCommand({
+					id: `custom-${def.id}`,
+					name: def.name,
+					editorCallback: (editor, ctx) => {
+						void (async () => {
+							const result = await executeCustomCommand(
+								def,
+								this.app,
+								editor,
+								ctx.file ?? undefined,
+							);
+							this.app.workspace.trigger(
+								"agent-client:inject-message" as "quit",
+								this.lastActiveChatViewId,
+								result,
+							);
+						})();
+					},
+				});
+			} else {
+				// frontmatter and response: always visible; use getActiveFile() for file context
+				this.addCommand({
+					id: `custom-${def.id}`,
+					name: def.name,
+					callback: () => {
+						void (async () => {
+							const file =
+								this.app.workspace.getActiveFile() ?? undefined;
+							const result = await executeCustomCommand(
+								def,
+								this.app,
+								undefined,
+								file,
+							);
+							this.app.workspace.trigger(
+								"agent-client:inject-message" as "quit",
+								this.lastActiveChatViewId,
+								result,
+							);
+						})();
+					},
+				});
+			}
+		}
+
+		// Built-in: list all custom commands in the active chat panel
+		this.addCommand({
+			id: "list-local-commands",
+			name: "List local commands",
+			callback: () => {
+				const defs = this.customCommandDefs;
+				let md: string;
+				if (defs.length === 0) {
+					md =
+						"**Local commands:** none configured. Add entries to `.obsidian/plugins/agent-client/commands.json`.";
+				} else {
+					const rows = defs
+						.map((d) => {
+							const p = d.params as unknown as Record<string, unknown>;
+							const detail =
+								d.action === "move-line"
+									? `→ ${String(p.targetFile ?? "")}`
+									: d.action === "frontmatter"
+										? `${String(p.field ?? "")} = ${String(p.value ?? "")}`
+										: d.action === "append"
+											? `→ ${String(p.file ?? "")}`
+											: String(p.template ?? "").slice(0, 40);
+							return `| ${d.name} | ${d.action} | ${detail} |`;
+						})
+						.join("\n");
+					md = `**Local commands**\n\n| Command | Action | Details |\n|---|---|---|\n${rows}`;
+				}
+				this.app.workspace.trigger(
+					"agent-client:inject-message" as "quit",
+					this.lastActiveChatViewId,
+					md,
+				);
+			},
+		});
+	}
+
 	async loadSettings() {
 		const raw = ((await this.loadData()) ?? {}) as Record<string, unknown>;
 		const D = DEFAULT_SETTINGS;
@@ -837,6 +1009,7 @@ export default class AgentClientPlugin extends Plugin {
 		const rg = obj(raw.gemini) ?? {};
 		const re = obj(raw.exportSettings) ?? {};
 		const rd = obj(raw.displaySettings) ?? {};
+		const rh = obj(raw.hermesApi) ?? {};
 
 		// Normalize custom agents
 		const customAgents = Array.isArray(raw.customAgents)
@@ -899,6 +1072,12 @@ export default class AgentClientPlugin extends Plugin {
 			},
 			customAgents,
 			defaultAgentId,
+			transportMode: enumVal(raw.transportMode, ["acp", "hermes-api"], D.transportMode),
+			hermesApi: {
+				endpoint: str(rh.endpoint, D.hermesApi.endpoint),
+				apiKey: str(rh.apiKey, D.hermesApi.apiKey),
+				defaultModel: str(rh.defaultModel, D.hermesApi.defaultModel),
+			},
 			autoAllowPermissions: bool(
 				raw.autoAllowPermissions,
 				D.autoAllowPermissions,

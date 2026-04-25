@@ -15,7 +15,7 @@ import type {
 	SessionUpdate,
 	SessionConfigOption,
 } from "../types/session";
-import type { AcpClient } from "../acp/acp-client";
+import type { IAgentTransport } from "../types/transport";
 import type { ISettingsAccess } from "../services/settings-service";
 import type { ErrorInfo } from "../types/errors";
 import {
@@ -75,7 +75,7 @@ export interface UseAgentSessionReturn {
 // ============================================================================
 
 export function useAgentSession(
-	agentClient: AcpClient,
+	agentClient: IAgentTransport,
 	settingsAccess: ISettingsAccess,
 	workingDirectory: string,
 	setErrorInfo: (error: ErrorInfo | null) => void,

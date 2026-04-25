@@ -16,12 +16,13 @@ import type {
 	ResourceLinkPromptContent,
 } from "../types/chat";
 import type { ChatSession, SessionUpdate } from "../types/session";
-import type { AcpClient } from "../acp/acp-client";
+import type { IAgentTransport } from "../types/transport";
 import type { IVaultAccess, NoteMetadata } from "../services/vault-service";
 import type { ISettingsAccess } from "../services/settings-service";
 import type { ErrorInfo } from "../types/errors";
 import type { IMentionService } from "../utils/mention-parser";
 import { preparePrompt, sendPreparedPrompt } from "../services/message-sender";
+import { HermesError } from "../transport/hermes-api-transport";
 import { Platform } from "obsidian";
 import {
 	rebuildToolCallIndex,
@@ -57,11 +58,14 @@ export interface UseAgentMessagesReturn {
 	lastUserMessage: string | null;
 
 	// Message operations
+	addMessage: (message: ChatMessage) => void;
+	replaceMessage: (id: string, updated: ChatMessage) => void;
 	sendMessage: (
 		content: string,
 		options: SendMessageOptions,
 	) => Promise<void>;
 	clearMessages: () => void;
+	clearSending: () => void;
 	setInitialMessages: (
 		history: Array<{
 			role: string;
@@ -89,7 +93,7 @@ export interface UseAgentMessagesReturn {
 // ============================================================================
 
 export function useAgentMessages(
-	agentClient: AcpClient,
+	agentClient: IAgentTransport,
 	settingsAccess: ISettingsAccess,
 	vaultAccess: IVaultAccess & IMentionService,
 	session: ChatSession,
@@ -162,6 +166,18 @@ export function useAgentMessages(
 
 	const addMessage = useCallback((message: ChatMessage): void => {
 		setMessages((prev) => [...prev, message]);
+	}, []);
+
+	const replaceMessage = useCallback(
+		(id: string, updated: ChatMessage): void => {
+			setMessages((prev) => prev.map((m) => (m.id === id ? updated : m)));
+		},
+		[],
+	);
+
+	const clearSending = useCallback((): void => {
+		setIsSending(false);
+		setLastUserMessage(null);
 	}, []);
 
 	const setIgnoreUpdates = useCallback((ignore: boolean): void => {
@@ -331,10 +347,18 @@ export function useAgentMessages(
 				}
 			} catch (error) {
 				setIsSending(false);
-				setErrorInfo({
-					title: "Send Message Failed",
-					message: `Failed to send message: ${error instanceof Error ? error.message : String(error)}`,
-				});
+				if (error instanceof HermesError) {
+					setErrorInfo({
+						title: "Send Failed",
+						message: error.message,
+						suggestion: error.suggestion,
+					});
+				} else {
+					setErrorInfo({
+						title: "Send Message Failed",
+						message: `Failed to send message: ${error instanceof Error ? error.message : String(error)}`,
+					});
+				}
 			}
 		},
 		[
@@ -410,8 +434,11 @@ export function useAgentMessages(
 		messages,
 		isSending,
 		lastUserMessage,
+		addMessage,
+		replaceMessage,
 		sendMessage,
 		clearMessages,
+		clearSending,
 		setInitialMessages,
 		setMessagesFromLocal,
 		clearError,

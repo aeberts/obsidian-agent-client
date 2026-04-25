@@ -7,7 +7,7 @@
 
 import type { AgentEnvVar, CustomAgentSettings } from "../plugin";
 import type { BaseAgentSettings } from "../types/agent";
-import type { AgentConfig } from "../acp/acp-client";
+import type { AgentConfig } from "../types/transport";
 
 // ============================================================================
 // Display Settings

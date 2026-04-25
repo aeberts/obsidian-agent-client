@@ -43,6 +43,10 @@ sessions/
 docs/.vitepress/dist/
 docs/.vitepress/cache/
 
+# Python cache artifacts
+__pycache__/
+*.pyc
+
 # Personal developer logs
 dev/
 

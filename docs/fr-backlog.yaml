@@ -1,0 +1,145 @@
+version: 1
+project: obsidian-agent-client Hermes transport
+defaults:
+  max_attempts_per_fr: 3
+  implement_command_template: claude -p "$(cat {prompt_file})" --dangerously-skip-permissions
+    --max-turns 30
+  gate_script: scripts/verify_fr_gate.sh
+requirements:
+- id: FR-1
+  title: Transport abstraction seam
+  status: done
+  requirement: Introduce transport boundary seam and preserve current behavior parity.
+  acceptance_criteria:
+  - Build succeeds
+  - "WSL\u2194Windows OAC smoke passes"
+  - No regression in gateway smoke
+  implementation_prompt: 'Implement FR-1 in small commits.
+
+    Requirements:
+
+    - Keep deltas minimal and upgrade-safe.
+
+    - Use existing architecture and naming conventions.
+
+    - Add/adjust tests when behavior changes.
+
+    - Do not mark complete unless acceptance criteria pass.
+
+    '
+  gate_commands:
+  - npm run test:gateway-smoke
+  - npm run test:ui-smoke:wsl-win
+  completed_at: '2026-04-21T16:54:39.585236'
+- id: FR-2
+  title: Auto-mention current note reliability in Hermes path
+  status: done
+  requirement: Auto-mention should always follow current active markdown note.
+  acceptance_criteria:
+  - Switching notes updates mention source deterministically
+  - No stale-note mention insertion on send
+  - FR-2 smoke/gate checks pass
+  implementation_prompt: 'Implement FR-2 in Hermes transport path first.
+
+    Prioritize deterministic active-note tracking and send-time mention correctness.
+
+    Only touch ACP path if there is a trivial/shared fix.
+
+    '
+  gate_commands:
+  - npm run test:gateway-smoke
+  - npm run test:ui-smoke:wsl-win
+  completed_at: '2026-04-21T17:02:22.676913'
+- id: FR-3
+  title: Deterministic local command router
+  status: done
+  completed_at: '2026-04-22T07:33:50Z'
+  requirement: Add a local fast-path for deterministic task operations and escalate ambiguous work to Hermes transport.
+  acceptance_criteria:
+  - Local deterministic operations execute without LLM roundtrip
+  - Ambiguous/complex operations explicitly escalate to Hermes transport
+  - Command outcomes remain visible and deterministic
+  implementation_prompt: 'Implement FR-3 with minimal invasive changes.
+
+    Scope:
+
+    - Create deterministic routing for simple task operations (capture/move/status/metadata updates).
+
+    - Ensure explicit escalation path to Hermes transport for ambiguous/complex commands.
+
+    - Preserve existing UX contracts and avoid broad refactors.
+
+    '
+  gate_commands:
+  - npm run test:gateway-smoke
+  - npm run test:ui-smoke:wsl-win
+- id: FR-4
+  title: Non-blocking command execution
+  status: pending
+  requirement: Support queued/background execution for long-running operations with user-visible job states.
+  acceptance_criteria:
+  - Long operations can run in background while user continues interacting
+  - Job states surfaced as queued/running/succeeded/failed/cancelled
+  - No silent failures
+  implementation_prompt: 'Implement FR-4 in smallest slices.
+
+    Scope:
+
+    - Add non-blocking execution path and queue semantics for long operations.
+
+    - Surface job lifecycle states in UI updates/events.
+
+    - Keep failure handling explicit and visible.
+
+    '
+  gate_commands:
+  - npm run test:gateway-smoke
+  - npm run test:ui-smoke:wsl-win
+- id: FR-5
+  title: Batch inbox processing
+  status: pending
+  requirement: Provide async-capable batch workflow for inbox processing with visible status and policy toggle.
+  acceptance_criteria:
+  - Batch inbox command/workflow exists
+  - Supports process-all vs process-selected policy
+  - Batch status/progress is visible
+  implementation_prompt: 'Implement FR-5 with deterministic command surface and async-capable execution.
+
+    Keep UX explicit for policy toggles and progress visibility.
+
+    '
+  gate_commands:
+  - npm run test:gateway-smoke
+  - npm run test:ui-smoke:wsl-win
+- id: FR-6
+  title: Command surface and UX contract
+  status: pending
+  requirement: Define deterministic command classification and keep behavior discoverable.
+  acceptance_criteria:
+  - Commands clearly classified as local deterministic, Hermes roundtrip, or background-only
+  - Behavior remains deterministic and discoverable
+  - Documentation updated for command contract
+  implementation_prompt: 'Implement FR-6 by formalizing command routing/UX contract without overengineering.
+
+    Ensure command behavior is explicit and user-visible.
+
+    '
+  gate_commands:
+  - npm run test:gateway-smoke
+  - npm run test:ui-smoke:wsl-win
+- id: FR-7
+  title: Parity and safety baseline
+  status: pending
+  requirement: Maintain ACP baseline reliability parity and define actionable failure UX for transport/network/auth/timeouts.
+  acceptance_criteria:
+  - ACP baseline scenarios continue to function
+  - Hermes mode shows actionable recovery guidance on failure classes
+  - No silent failure paths for core chat workflows
+  implementation_prompt: 'Implement FR-7 with focus on safety and reliability parity.
+
+    Add clear failure UX and recovery guidance for network/auth/timeout errors.
+
+    '
+  gate_commands:
+  - npm run test:gateway-smoke
+  - npm run test:ui-smoke:wsl-win
