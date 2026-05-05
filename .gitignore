@@ -29,6 +29,7 @@ sessions/
 
 # Exclude macOS Finder (System Explorer) View States
 .DS_Store
+.gitignore.swp
 
 # AI coding agent settings (tracked for shared configuration)
 # .claude/
@@ -52,3 +53,9 @@ dev/
 
 # Local implementation plans and working documents
 plan/
+
+# Artifacts
+artifacts/
+
+# Temp
+tmp/

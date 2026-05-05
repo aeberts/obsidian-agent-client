@@ -86,6 +86,8 @@ export interface AgentClientPluginSettings {
 		endpoint: string;
 		apiKey: string;
 		defaultModel: string;
+		/** Canonical WSL vault path to use for Hermes API sessions; avoids slow path discovery. */
+		vaultPathOverride: string;
 		/** Absolute paths to SKILL.md files (or skill dirs) to prepend on new sessions, one per line */
 		autoLoadSkills: string;
 	};
@@ -168,6 +170,7 @@ const DEFAULT_SETTINGS: AgentClientPluginSettings = {
 		endpoint: "http://127.0.0.1:8642",
 		apiKey: "",
 		defaultModel: "gpt-5.3-codex",
+		vaultPathOverride: "/mnt/c/Users/alexe/Dropbox/Hermes/Hermes",
 		autoLoadSkills: "",
 	},
 	autoAllowPermissions: false,
@@ -1080,6 +1083,7 @@ export default class AgentClientPlugin extends Plugin {
 				endpoint: str(rh.endpoint, D.hermesApi.endpoint),
 				apiKey: str(rh.apiKey, D.hermesApi.apiKey),
 				defaultModel: str(rh.defaultModel, D.hermesApi.defaultModel),
+				vaultPathOverride: str(rh.vaultPathOverride, D.hermesApi.vaultPathOverride),
 				autoLoadSkills: str(rh.autoLoadSkills, D.hermesApi.autoLoadSkills),
 			},
 			autoAllowPermissions: bool(

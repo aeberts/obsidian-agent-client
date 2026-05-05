@@ -165,6 +165,22 @@ export class AgentClientSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
+			.setName("Hermes WSL vault path")
+			.setDesc(
+				"Canonical WSL vault path sent as the Hermes API session cwd. " +
+				"This avoids slow or wrong /mnt/c/Users/<name>/... discovery.",
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("/mnt/c/Users/alexe/Dropbox/Hermes/Hermes")
+					.setValue(this.plugin.settings.hermesApi.vaultPathOverride)
+					.onChange(async (value) => {
+						this.plugin.settings.hermesApi.vaultPathOverride = value.trim();
+						await this.plugin.saveSettings();
+					}),
+			);
+
+		new Setting(containerEl)
 			.setName("Auto-load skills")
 			.setDesc(
 				"Skill paths to inject into context at the start of each new session. " +

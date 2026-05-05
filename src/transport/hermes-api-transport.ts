@@ -13,6 +13,7 @@ import type {
 import type { PromptContent } from "../types/chat";
 import type { AgentConfig, IAgentTransport, TerminalOutputResult } from "../types/transport";
 import type { SlashCommand } from "../types/session";
+import { buildHermesSkillContext, shouldPrependHermesSkillContext } from "./hermes-skill-context";
 
 /**
  * Messaging-platform slash commands built into the Hermes gateway.
@@ -237,10 +238,10 @@ export class HermesApiTransport implements IAgentTransport {
 		this.cancelledSessions.delete(sessionId);
 
 		let input = this.flattenPromptContent(content);
-		if (state.pendingSkillContext) {
+		if (shouldPrependHermesSkillContext(input, state.pendingSkillContext)) {
 			input = state.pendingSkillContext + "\n\n" + input;
-			state.pendingSkillContext = undefined;
 		}
+		state.pendingSkillContext = undefined;
 		const model = this.getSessionModel(state) || this.defaultModel;
 		this.logger.log(
 			`[HermesApiTransport] sendPrompt start session=${sessionId} model=${model} inputChars=${input.length}`,
@@ -736,14 +737,7 @@ export class HermesApiTransport implements IAgentTransport {
 	/** Build a skill-load instruction to prepend on the first message of a new session. */
 	private buildSkillContext(): string | undefined {
 		const raw = this.plugin.settings.hermesApi?.autoLoadSkills ?? "";
-		const paths = raw.split("\n").map((p) => p.trim()).filter(Boolean);
-		if (paths.length === 0) return undefined;
-		// Normalise directory paths to SKILL.md — Hermes will read the file itself
-		const filePaths = paths.map((p) => (p.endsWith(".md") ? p : `${p}/SKILL.md`));
-		return (
-			`[Load these skills into context before responding — use read_file on each:]\n` +
-			filePaths.join("\n")
-		);
+		return buildHermesSkillContext(raw);
 	}
 
 	/**

@@ -32,6 +32,7 @@ import {
 	tryRestoreConfigOption,
 	restoreLegacyConfig,
 } from "../services/session-state";
+import { resolveHermesApiWorkingDirectory } from "../utils/hermes-vault-path";
 
 // ============================================================================
 // Types
@@ -169,6 +170,7 @@ export function useAgentSession(
 		async (overrideAgentId?: string, overrideCwd?: string) => {
 			const effectiveCwd = overrideCwd || workingDirectory;
 			const settings = settingsAccess.getSnapshot();
+			const runtimeCwd = resolveHermesApiWorkingDirectory(settings, effectiveCwd);
 			const agentId = overrideAgentId || getDefaultAgentId(settings);
 			const currentAgent = getCurrentAgent(settings, agentId);
 
@@ -210,7 +212,7 @@ export function useAgentSession(
 					settings,
 					agentSettings,
 					agentId,
-					effectiveCwd,
+					runtimeCwd,
 				);
 
 				const initResult =
@@ -220,7 +222,7 @@ export function useAgentSession(
 						: null;
 
 				const sessionResult =
-					await agentClient.newSession(effectiveCwd);
+					await agentClient.newSession(runtimeCwd);
 
 				setSession((prev) => ({
 					...prev,
