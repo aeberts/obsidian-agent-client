@@ -13,7 +13,11 @@ import type {
 import type { PromptContent } from "../types/chat";
 import type { AgentConfig, IAgentTransport, TerminalOutputResult } from "../types/transport";
 import type { SlashCommand } from "../types/session";
-import { buildHermesSkillContext, shouldPrependHermesSkillContext } from "./hermes-skill-context";
+import {
+	createHermesSkillLoadState,
+	prepareHermesSkillContextInput,
+	type HermesSkillLoadState,
+} from "./hermes-skill-context";
 
 /**
  * Messaging-platform slash commands built into the Hermes gateway.
@@ -134,8 +138,8 @@ interface HermesSessionState {
 	updatedAt: string;
 	title?: string;
 	configOptions?: SessionConfigOption[];
-	/** Skill context to prepend on the first sendPrompt of this session, then cleared. */
-	pendingSkillContext?: string;
+	/** In-memory, session-scoped skill-load cache for Hermes API skill banners. */
+	skillLoadState: HermesSkillLoadState;
 	/** ID of the last completed response; used for direct-ID state lookup on subsequent turns. */
 	lastResponseId?: string;
 }
@@ -149,6 +153,7 @@ export class HermesApiTransport implements IAgentTransport {
 	private apiKey = "";
 	private defaultModel = "gpt-5.3-codex";
 	private sessionStates = new Map<string, HermesSessionState>();
+	private settingsSignature = "";
 	private callbacks = new Set<(update: SessionUpdate) => void>();
 	private cancelledSessions = new Set<string>();
 	private sessionAbortControllers = new Map<string, AbortController>();
@@ -167,6 +172,7 @@ export class HermesApiTransport implements IAgentTransport {
 		this.defaultModel = config.env?.HERMES_MODEL || "gpt-5.3-codex";
 		this.currentAgentId = config.id;
 		this.initialized = true;
+		this.settingsSignature = this.getSkillSettingsSignature();
 
 		const agentCapabilities: AgentCapabilities = {
 			loadSession: true,
@@ -201,6 +207,7 @@ export class HermesApiTransport implements IAgentTransport {
 			sessionId,
 			cwd: workingDirectory,
 			updatedAt: new Date().toISOString(),
+			skillLoadState: createHermesSkillLoadState(),
 			configOptions: [
 				{
 					id: "model",
@@ -212,7 +219,6 @@ export class HermesApiTransport implements IAgentTransport {
 				},
 			],
 		};
-		state.pendingSkillContext = this.buildSkillContext();
 		this.sessionStates.set(sessionId, state);
 		void this.fetchAndEmitGatewayCommands(sessionId);
 		return {
@@ -236,12 +242,27 @@ export class HermesApiTransport implements IAgentTransport {
 		}
 
 		this.cancelledSessions.delete(sessionId);
+		this.resetSkillStatesIfSettingsChanged();
 
 		let input = this.flattenPromptContent(content);
-		if (shouldPrependHermesSkillContext(input, state.pendingSkillContext)) {
-			input = state.pendingSkillContext + "\n\n" + input;
+		const prepared = prepareHermesSkillContextInput(
+			input,
+			this.plugin.settings.hermesApi?.autoLoadSkills ?? "",
+			state.skillLoadState,
+		);
+		input = prepared.input;
+		if (prepared.loadedCount > 0) {
+			this.emitHermesSkillStatus(sessionId, `Loading ${prepared.loadedCount} Hermes skill${prepared.loadedCount === 1 ? "" : "s"}`);
+			this.logger.log(
+				`[HermesApiTransport] loading ${prepared.loadedCount} skill(s) for session ${sessionId}`,
+			);
 		}
-		state.pendingSkillContext = undefined;
+		if (prepared.skippedCount > 0) {
+			this.emitHermesSkillStatus(sessionId, `Skipping ${prepared.skippedCount} previously loaded Hermes skill${prepared.skippedCount === 1 ? "" : "s"}`);
+			this.logger.log(
+				`[HermesApiTransport] skipping ${prepared.skippedCount} previously loaded skill(s) for session ${sessionId}`,
+			);
+		}
 		const model = this.getSessionModel(state) || this.defaultModel;
 		this.logger.log(
 			`[HermesApiTransport] sendPrompt start session=${sessionId} model=${model} inputChars=${input.length}`,
@@ -615,6 +636,7 @@ export class HermesApiTransport implements IAgentTransport {
 			cwd,
 			title: parent.title,
 			updatedAt: new Date().toISOString(),
+			skillLoadState: createHermesSkillLoadState(),
 			configOptions: parent.configOptions,
 		};
 		this.sessionStates.set(newSessionId, forked);
@@ -674,6 +696,7 @@ export class HermesApiTransport implements IAgentTransport {
 				sessionId,
 				cwd,
 				updatedAt: new Date().toISOString(),
+				skillLoadState: createHermesSkillLoadState(),
 				configOptions: [
 					{
 						id: "model",
@@ -734,10 +757,29 @@ export class HermesApiTransport implements IAgentTransport {
 		];
 	}
 
-	/** Build a skill-load instruction to prepend on the first message of a new session. */
-	private buildSkillContext(): string | undefined {
-		const raw = this.plugin.settings.hermesApi?.autoLoadSkills ?? "";
-		return buildHermesSkillContext(raw);
+	private emitHermesSkillStatus(sessionId: string, label: string): void {
+		this.emit({ type: "agent_message_chunk", sessionId, text: `_📋 ${label}_\n` });
+	}
+
+	private getSkillSettingsSignature(): string {
+		const hermesApi = this.plugin.settings.hermesApi;
+		return JSON.stringify({
+			transportMode: this.plugin.settings.transportMode,
+			hermesEndpoint: hermesApi?.endpoint ?? "",
+			hermesModel: hermesApi?.defaultModel ?? "",
+			autoLoadSkills: hermesApi?.autoLoadSkills ?? "",
+		});
+	}
+
+	private resetSkillStatesIfSettingsChanged(): void {
+		const nextSignature = this.getSkillSettingsSignature();
+		if (nextSignature === this.settingsSignature) return;
+
+		for (const state of this.sessionStates.values()) {
+			state.skillLoadState = createHermesSkillLoadState();
+		}
+		this.settingsSignature = nextSignature;
+		this.logger.log("[HermesApiTransport] cleared loaded skill cache after settings change");
 	}
 
 	/**
