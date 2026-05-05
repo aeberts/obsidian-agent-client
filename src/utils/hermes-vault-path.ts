@@ -10,6 +10,7 @@ export const DEFAULT_HERMES_WSL_VAULT_PATH = "/home/zand/vault";
 
 const LEGACY_HERMES_WSL_VAULT_PATHS = new Set([
 	"/mnt/c/Users/alexe/Dropbox/Hermes/Hermes",
+	"/Users/zand/Dropbox/Hermes/Hermes",
 	"~/vault",
 ]);
 
@@ -52,5 +53,5 @@ export function resolveHermesApiWorkingDirectory(
 		return convertWindowsPathToWslPath(workingDirectory);
 	}
 
-	return workingDirectory;
+	return normalizeHermesVaultPathOverride(workingDirectory);
 }

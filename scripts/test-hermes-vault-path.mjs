@@ -66,6 +66,19 @@ try {
 	assert.equal(
 		resolveHermesApiWorkingDirectory(
 			{
+				transportMode: "hermes-api",
+				windowsWslMode: false,
+				hermesApi: { vaultPathOverride: "" },
+			},
+			"/Users/zand/Dropbox/Hermes/Hermes",
+		),
+		"/home/zand/vault",
+		"Hermes API should normalize the Mac Dropbox vault path to the canonical API-side vault path",
+	);
+
+	assert.equal(
+		resolveHermesApiWorkingDirectory(
+			{
 				transportMode: "acp",
 				windowsWslMode: true,
 				hermesApi: { vaultPathOverride: "/home/zand/vault" },

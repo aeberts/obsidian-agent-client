@@ -23,6 +23,7 @@ import type { ErrorInfo } from "../types/errors";
 import type { IMentionService } from "../utils/mention-parser";
 import { preparePrompt, sendPreparedPrompt } from "../services/message-sender";
 import { HermesError } from "../transport/hermes-api-transport";
+import { resolveHermesApiWorkingDirectory } from "../utils/hermes-vault-path";
 import { Platform } from "obsidian";
 import {
 	rebuildToolCallIndex,
@@ -248,6 +249,10 @@ export function useAgentMessages(
 			}
 
 			const settings = settingsAccess.getSnapshot();
+			const agentVaultBasePath = resolveHermesApiWorkingDirectory(
+				settings,
+				options.vaultBasePath,
+			);
 
 			const prepared = await preparePrompt(
 				{
@@ -255,7 +260,7 @@ export function useAgentMessages(
 					images: options.images,
 					resourceLinks: options.resourceLinks,
 					activeNote: options.activeNote,
-					vaultBasePath: options.vaultBasePath,
+					vaultBasePath: agentVaultBasePath,
 					isAutoMentionDisabled: options.isAutoMentionDisabled,
 					convertToWsl: shouldConvertToWsl,
 					supportsEmbeddedContext:

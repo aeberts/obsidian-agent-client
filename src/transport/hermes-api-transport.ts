@@ -648,7 +648,12 @@ export class HermesApiTransport implements IAgentTransport {
 			.map((block) => {
 				if (block.type === "text") return block.text;
 				if (block.type === "resource") {
-					return block.resource?.text || "";
+					const uri = block.resource?.uri;
+					const text = block.resource?.text || "";
+					if (uri) {
+						return `<obsidian_resource uri="${uri}">\n${text}\n</obsidian_resource>`;
+					}
+					return text;
 				}
 				if (block.type === "resource_link") {
 					return `[resource:${block.name || block.uri}] ${block.uri}`;
