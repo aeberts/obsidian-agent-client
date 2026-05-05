@@ -20,7 +20,22 @@ try {
 		logLevel: "silent",
 	});
 
-	const { resolveHermesApiWorkingDirectory } = await import(pathToFileURL(outfile));
+	const { DEFAULT_HERMES_WSL_VAULT_PATH, resolveHermesApiWorkingDirectory } = await import(pathToFileURL(outfile));
+
+	assert.equal(DEFAULT_HERMES_WSL_VAULT_PATH, "/home/zand/vault");
+
+	assert.equal(
+		resolveHermesApiWorkingDirectory(
+			{
+				transportMode: "hermes-api",
+				windowsWslMode: true,
+				hermesApi: { vaultPathOverride: "/home/zand/vault" },
+			},
+			"C:\\Users\\zand\\Dropbox\\Hermes\\Hermes",
+		),
+		"/home/zand/vault",
+		"Hermes API should prefer the configured canonical /home/zand/vault symlink over guessed Windows-user paths",
+	);
 
 	assert.equal(
 		resolveHermesApiWorkingDirectory(
@@ -31,8 +46,8 @@ try {
 			},
 			"C:\\Users\\zand\\Dropbox\\Hermes\\Hermes",
 		),
-		"/mnt/c/Users/alexe/Dropbox/Hermes/Hermes",
-		"Hermes API should prefer the configured canonical WSL vault path over guessed Windows-user paths",
+		"/home/zand/vault",
+		"Hermes API should normalize the legacy long Windows-mounted WSL override to /home/zand/vault",
 	);
 
 	assert.equal(
@@ -53,7 +68,7 @@ try {
 			{
 				transportMode: "acp",
 				windowsWslMode: true,
-				hermesApi: { vaultPathOverride: "/mnt/c/Users/alexe/Dropbox/Hermes/Hermes" },
+				hermesApi: { vaultPathOverride: "/home/zand/vault" },
 			},
 			"C:\\Users\\alexe\\Dropbox\\Hermes\\Hermes",
 		),

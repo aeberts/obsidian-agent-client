@@ -48,6 +48,7 @@ import {
 } from "./types/agent";
 import type { SavedSessionInfo } from "./types/session";
 import { initializeLogger } from "./utils/logger";
+import { DEFAULT_HERMES_WSL_VAULT_PATH } from "./utils/hermes-vault-path";
 
 // Re-export for backward compatibility
 export type { AgentEnvVar, CustomAgentSettings };
@@ -170,7 +171,7 @@ const DEFAULT_SETTINGS: AgentClientPluginSettings = {
 		endpoint: "http://127.0.0.1:8642",
 		apiKey: "",
 		defaultModel: "gpt-5.3-codex",
-		vaultPathOverride: "/mnt/c/Users/alexe/Dropbox/Hermes/Hermes",
+		vaultPathOverride: DEFAULT_HERMES_WSL_VAULT_PATH,
 		autoLoadSkills: "",
 	},
 	autoAllowPermissions: false,

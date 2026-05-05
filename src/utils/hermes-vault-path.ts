@@ -6,6 +6,21 @@ type HermesVaultPathSettings = {
 	};
 };
 
+export const DEFAULT_HERMES_WSL_VAULT_PATH = "/home/zand/vault";
+
+const LEGACY_HERMES_WSL_VAULT_PATHS = new Set([
+	"/mnt/c/Users/alexe/Dropbox/Hermes/Hermes",
+	"~/vault",
+]);
+
+function normalizeHermesVaultPathOverride(path: string): string {
+	const trimmed = path.trim();
+	if (LEGACY_HERMES_WSL_VAULT_PATHS.has(trimmed)) {
+		return DEFAULT_HERMES_WSL_VAULT_PATH;
+	}
+	return trimmed;
+}
+
 export function convertWindowsPathToWslPath(path: string): string {
 	const normalized = path.replace(/\\/g, "/");
 	const match = normalized.match(/^([A-Za-z]):(\/.*)/);
@@ -30,7 +45,7 @@ export function resolveHermesApiWorkingDirectory(
 
 	const override = settings.hermesApi?.vaultPathOverride?.trim();
 	if (override) {
-		return override;
+		return normalizeHermesVaultPathOverride(override);
 	}
 
 	if (settings.windowsWslMode) {

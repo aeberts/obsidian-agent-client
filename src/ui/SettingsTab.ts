@@ -18,6 +18,7 @@ import {
 	CHAT_FONT_SIZE_MIN,
 	parseChatFontSize,
 } from "../services/settings-normalizer";
+import { DEFAULT_HERMES_WSL_VAULT_PATH } from "../utils/hermes-vault-path";
 
 export class AgentClientSettingTab extends PluginSettingTab {
 	plugin: AgentClientPlugin;
@@ -172,7 +173,7 @@ export class AgentClientSettingTab extends PluginSettingTab {
 			)
 			.addText((text) =>
 				text
-					.setPlaceholder("/mnt/c/Users/alexe/Dropbox/Hermes/Hermes")
+					.setPlaceholder(DEFAULT_HERMES_WSL_VAULT_PATH)
 					.setValue(this.plugin.settings.hermesApi.vaultPathOverride)
 					.onChange(async (value) => {
 						this.plugin.settings.hermesApi.vaultPathOverride = value.trim();
