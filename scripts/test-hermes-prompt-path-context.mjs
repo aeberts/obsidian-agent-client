@@ -68,6 +68,9 @@ try {
 	);
 	const textPayload = textResult.agentContent.map((block) => block.text ?? block.resource?.uri ?? "").join("\n");
 	assert.match(textPayload, /\/home\/zand\/vault\/TaskNotes\/Tasks\/T58-session-scoped-skill-loading-cache\.md/);
+	assert.match(textPayload, /ambient and read-only by default/);
+	assert.match(textPayload, /do not update Progress, What Was Done, status, or dateModified/);
+	assert.doesNotMatch(textPayload, /consider using the Read tool/);
 	assert.doesNotMatch(textPayload, /\/Users\/zand\/Dropbox\/Hermes/);
 
 	const resourceResult = await preparePrompt(
@@ -79,6 +82,9 @@ try {
 		.map((block) => block.resource?.uri ?? block.text ?? "")
 		.join("\n");
 	assert.match(resourceUris, /file:\/\/\/home\/zand\/vault\/TaskNotes\/Tasks\/T58-session-scoped-skill-loading-cache\.md/);
+	assert.match(resourceUris, /ambient and read-only by default/);
+	assert.match(resourceUris, /do not update Progress, What Was Done, status, or dateModified/);
+	assert.doesNotMatch(resourceUris, /consider using the Read tool/);
 	assert.doesNotMatch(resourceUris, /\/Users\/zand\/Dropbox\/Hermes/);
 } finally {
 	await rm(outdir, { recursive: true, force: true });

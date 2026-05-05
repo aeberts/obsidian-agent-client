@@ -145,6 +145,9 @@ export interface SendPromptResult {
 const DEFAULT_MAX_NOTE_LENGTH = 10000; // Default maximum characters per note
 const DEFAULT_MAX_SELECTION_LENGTH = 10000; // Default maximum characters for selection
 
+const AMBIENT_NOTE_CONTEXT_POLICY =
+	"Obsidian note context is ambient and read-only by default. Use the provided note content if helpful, but do not call read/search tools for these notes and do not patch, edit, update, or otherwise modify them unless the user explicitly asks to update, record, log, complete, patch, or modify the note. For TaskNotes/todos, do not update Progress, What Was Done, status, or dateModified merely because the user gives conversational feedback or confirms something worked.";
+
 // ============================================================================
 // Shared Helper Functions
 // ============================================================================
@@ -398,7 +401,13 @@ async function preparePromptWithEmbeddedContext(
 		input.isAutoMentionDisabled,
 	);
 
+	const noteContextPolicyBlocks: PromptContent[] =
+		resourceBlocks.length > 0 || autoMentionBlocks.length > 0
+			? [{ type: "text" as const, text: AMBIENT_NOTE_CONTEXT_POLICY }]
+			: [];
+
 	const agentContent: PromptContent[] = [
+		...noteContextPolicyBlocks,
 		...resourceBlocks,
 		...autoMentionBlocks,
 		...(input.message || autoMentionPrefix
@@ -478,9 +487,13 @@ async function preparePromptWithTextContext(
 	);
 
 	// Build agent message text (context blocks + auto-mention prefix + original message)
-	const agentMessageText =
+	const noteContextBlocks =
 		contextBlocks.length > 0
-			? contextBlocks.join("\n") +
+			? [AMBIENT_NOTE_CONTEXT_POLICY, ...contextBlocks]
+			: contextBlocks;
+	const agentMessageText =
+		noteContextBlocks.length > 0
+			? noteContextBlocks.join("\n") +
 				"\n\n" +
 				autoMentionPrefix +
 				input.message
@@ -535,7 +548,7 @@ async function buildAutoMentionResource(
 			return [
 				{
 					type: "text",
-					text: `The user has selected lines ${fromLine}-${toLine} in ${uri}. If relevant, use the Read tool to examine the specific lines.`,
+					text: `The user selected lines ${fromLine}-${toLine} in ${uri}, but the selected text could not be embedded. Treat this as ambient read-only context; do not read/search or modify the note unless the user explicitly asks.`,
 				},
 			];
 		}
@@ -557,7 +570,7 @@ async function buildAutoMentionResource(
 			} as ResourcePromptContent,
 			{
 				type: "text",
-				text: `The user has selected lines ${fromLine}-${toLine} in the above note. This is what they are currently focusing on.`,
+				text: `The selected lines ${fromLine}-${toLine} are embedded above as ambient read-only context. Use them if helpful, but do not update the note unless explicitly asked.`,
 			},
 		];
 	}
@@ -565,7 +578,7 @@ async function buildAutoMentionResource(
 	return [
 		{
 			type: "text",
-			text: `The user has opened the note ${uri} in Obsidian. This may or may not be related to the current conversation. If it seems relevant, consider using the Read tool to examine its content.`,
+			text: `The user has opened the note ${uri} in Obsidian. This is ambient read-only context. Use the provided path only if the user explicitly asks to inspect or modify the file; do not read/search for or update the note just because it is open.`,
 		},
 	];
 }
@@ -594,7 +607,7 @@ async function buildAutoMentionTextContext(
 			maxSelectionLength,
 		);
 		if (!sel) {
-			return `<obsidian_opened_note selection="lines ${fromLine}-${toLine}">The user opened the note ${absolutePath} in Obsidian and is focusing on lines ${fromLine}-${toLine}. This may or may not be related to the current conversation. If it seems relevant, consider using the Read tool to examine the specific lines.</obsidian_opened_note>`;
+			return `<obsidian_opened_note selection="lines ${fromLine}-${toLine}">The user opened the note ${absolutePath} in Obsidian and selected lines ${fromLine}-${toLine}, but the selected text could not be embedded. Treat this as ambient read-only context; do not read/search or modify the note unless the user explicitly asks.</obsidian_opened_note>`;
 		}
 
 		const truncationNote = sel.wasTruncated
@@ -602,15 +615,15 @@ async function buildAutoMentionTextContext(
 			: "";
 
 		return `<obsidian_opened_note selection="lines ${fromLine}-${toLine}">
-The user opened the note ${absolutePath} in Obsidian and selected the following text (lines ${fromLine}-${toLine}):
+The user opened the note ${absolutePath} in Obsidian and selected the following text (lines ${fromLine}-${toLine}) as ambient read-only context:
 
 ${sel.text}${truncationNote}
 
-This is what the user is currently focusing on.
+Use the selected text if helpful, but do not update the note unless explicitly asked.
 </obsidian_opened_note>`;
 	}
 
-	return `<obsidian_opened_note>The user opened the note ${absolutePath} in Obsidian. This may or may not be related to the current conversation. If it seems relevant, consider using the Read tool to examine the content.</obsidian_opened_note>`;
+	return `<obsidian_opened_note>The user opened the note ${absolutePath} in Obsidian. This is ambient read-only context. Use the provided path only if the user explicitly asks to inspect or modify the file; do not read/search for or update the note just because it is open.</obsidian_opened_note>`;
 }
 
 // ============================================================================
