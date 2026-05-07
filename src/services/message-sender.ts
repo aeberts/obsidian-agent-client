@@ -146,7 +146,7 @@ const DEFAULT_MAX_NOTE_LENGTH = 10000; // Default maximum characters per note
 const DEFAULT_MAX_SELECTION_LENGTH = 10000; // Default maximum characters for selection
 
 const AMBIENT_NOTE_CONTEXT_POLICY =
-	"Obsidian note context is ambient and read-only by default. Use the provided note content if helpful, but do not call read/search tools for these notes and do not patch, edit, update, or otherwise modify them unless the user explicitly asks to update, record, log, complete, patch, or modify the note. For TaskNotes/todos, do not update Progress, What Was Done, status, or dateModified merely because the user gives conversational feedback or confirms something worked.";
+	"Obsidian note context is ambient by default. You may read/search the currently opened or explicitly referenced notes when relevant to the user’s message. For TaskNotes/todos, treat them as a living work log: you may proactively update Progress, What Was Done, status, dateModified, and related tracking fields whenever meaningful work occurs or new facts are established, even if the user did not explicitly ask to “update” the note. Prefer accurate, concise incremental updates over omission. If user intent is ambiguous, err toward recording rather than skipping. Do not make destructive or structural changes (renames, deletions, major rewrites) unless explicitly requested.";
 
 // ============================================================================
 // Shared Helper Functions
